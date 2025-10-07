@@ -15,12 +15,13 @@ import { getFundsTransactions } from "../services/dashboard.service.js";
 import { getGameSubmissions } from "../services/dashboard.service.js";
 
 export async function getDashboardHandler(req, rep) {
+  try {
     const data = await getDashboard()
-    rep.send({
-        data
-    });
+    rep.send({ data })
+  } catch (err) {
+    rep.status(500).send({ error: err instanceof Error ? err.message : "Unknown error" })
+  }
 }
-
 export async function getNormalUsersHandler(req, rep) {
     const data = await getNormalUsers();
     rep.send({
