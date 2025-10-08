@@ -7,13 +7,18 @@ const GAME_SUBMISSIONS_COLLECTION = db.collection("game_submissions")
 
 export const getDashboard = async () => {
   // Aggregation for total amount and bid count per game name (separate from ank logic)
+  function getMarketName(title) {
+    // Extract main market name (e.g., "TIME BAZAR" from "TIME BAZAR - Jodi")
+    return title.split(" - ")[0].trim();
+  }
+
   function aggregateGames(submissions) {
     const result = {};
     submissions.forEach(sub => {
-      const baseTitle = getBaseTitle(sub.title);
-      if (!result[baseTitle]) result[baseTitle] = { amount: 0, bidsCount: 0 };
-      result[baseTitle].amount += Number(sub.bidAmount) || 0;
-      result[baseTitle].bidsCount += 1;
+      const marketName = getMarketName(sub.title);
+      if (!result[marketName]) result[marketName] = { amount: 0, bidsCount: 0 };
+      result[marketName].amount += Number(sub.bidAmount) || 0;
+      result[marketName].bidsCount += 1;
     });
     return result;
   }
