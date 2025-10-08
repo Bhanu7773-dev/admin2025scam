@@ -19,3 +19,8 @@ export const getFundsOfUser = async ({ uuid }) => {
     lastUpdateReason: data.lastUpdateReason || null
   }
 }
+
+export const getAllFunds = async ({ limit = 20, startAfterId }) => {
+  let funds = []
+  return funds;
+}

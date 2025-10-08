@@ -117,6 +117,7 @@ export const getDashboard = async () => {
   }
 }
 
+// USELESS FOR NOW (DON'T DELETE THOUGH)
 export const getNormalUsers = async () => {
   const snapshot = await USERS_COLLECTION.where("isAdmin", "==", false).get()
   const users = snapshot.docs.map(doc => ({
