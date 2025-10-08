@@ -6,10 +6,22 @@ const USERS_COLLECTION = db.collection("users")
 const GAME_SUBMISSIONS_COLLECTION = db.collection("game_submissions")
 
 export const getDashboard = async () => {
-  const allUsers = await getAllUsers({includeAdmins: true})
+  // Aggregation for total amount and bid count per game name (separate from ank logic)
+  function aggregateGames(submissions) {
+    const result = {};
+    submissions.forEach(sub => {
+      const baseTitle = getBaseTitle(sub.title);
+      if (!result[baseTitle]) result[baseTitle] = { amount: 0, bidsCount: 0 };
+      result[baseTitle].amount += Number(sub.bidAmount) || 0;
+      result[baseTitle].bidsCount += 1;
+    });
+    return result;
+  }
+  const allUsersResult = await getAllUsers({includeAdmins: true});
+  const allUsers = Array.isArray(allUsersResult) ? allUsersResult : allUsersResult.users;
 
-  const admins = allUsers.filter(u => u.isAdmin === true)
-  const normalUsers = allUsers.filter(u => !u.isAdmin)
+  const admins = allUsers.filter(u => u.isAdmin === true);
+  const normalUsers = allUsers.filter(u => !u.isAdmin);
 
   const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
   const newUsersCount = normalUsers.filter(u => u.createdAt?.toDate?.() > oneDayAgo).length
@@ -20,14 +32,63 @@ export const getDashboard = async () => {
   let totalWinningAmount = 0
   let totalLostAmount = 0
 
-  biddingsSnapshot.docs.forEach(doc => {
-    const data = doc.data()
-    const amount = Number(data.bidAmount) || 0
-    totalBiddingAmount += amount
+  // Ank count aggregation for half sangam A and B
+  function getBaseTitle(title) {
+    // Remove " - Half Sangam A" or " - Half Sangam B" from the title
+    return title.replace(/ - Half Sangam [AB]/i, "").trim();
+  }
 
-    if (data.status === "won") totalWinningAmount += amount
-    else if (data.status === "lost") totalLostAmount += amount
-  })
+  function aggregateAnks(submissions) {
+    const result = {};
+    submissions.forEach(sub => {
+      const baseTitle = getBaseTitle(sub.title);
+      const ankMatch = sub.answer && sub.answer.match(/Ank: ?(\d)/);
+      const ank = ankMatch ? ankMatch[1] : null;
+      if (!ank) return;
+      if (!result[baseTitle]) result[baseTitle] = {};
+      if (!result[baseTitle][ank]) result[baseTitle][ank] = { amount: 0, bidsCount: 0 };
+      result[baseTitle][ank].amount += Number(sub.bidAmount) || 0;
+      result[baseTitle][ank].bidsCount += 1;
+    });
+    return result;
+  }
+
+  const halfSangamA = [];
+  const halfSangamB = [];
+
+  biddingsSnapshot.docs.forEach(doc => {
+    const data = doc.data();
+    const amount = Number(data.bidAmount) || 0;
+    totalBiddingAmount += amount;
+
+    if (data.status === "won") totalWinningAmount += amount;
+    else if (data.status === "lost") totalLostAmount += amount;
+
+    if (data.gameType === "Half Sangam A") halfSangamA.push({
+      title: data.title,
+      bidAmount: data.bidAmount,
+      answer: data.answer
+    });
+    if (data.gameType === "Half Sangam B") halfSangamB.push({
+      title: data.title,
+      bidAmount: data.bidAmount,
+      answer: data.answer
+    });
+  });
+
+  // Combine both Half Sangam A and B submissions
+  const combinedSangam = [...halfSangamA, ...halfSangamB];
+  const ank = aggregateAnks(combinedSangam);
+
+  // Aggregation for all game submissions (total amount and bid count per game name)
+  const allGameSubmissions = biddingsSnapshot.docs.map(doc => {
+    const data = doc.data();
+    return {
+      title: data.title,
+      bidAmount: data.bidAmount
+    };
+  });
+  const market_detail = aggregateGames(allGameSubmissions);
 
   const totalSubmissions = biddingsSnapshot.size
 
@@ -44,6 +105,8 @@ export const getDashboard = async () => {
       totalSubmissions,
       newUsersCount
     },
+    ank, // <-- Add ank separately
+      market_detail, // <-- Add market detail separately
     totalCompleted,
     totalDeclined
   }
