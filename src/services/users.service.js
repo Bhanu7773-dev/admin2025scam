@@ -211,24 +211,50 @@ export const getAllUsers = async ({ includeSubAdmins = false, limit = 20, startA
 };
 
 
+
 /**
- * Fetches a single user's details and their fund balance by UID.
+ * Fetches a single user's details from Firestore and their email from Firebase Auth.
  * @param {string} uid The user's Authentication UID.
- * @returns {Promise<object|null>} The user object or null if not found.
+ * @returns {Promise<object|null>} The combined user object with balance and email, or null if not found.
  */
 export const getUser = async (uid) => {
-    if (!uid) throw new Error("getUser(): uid is required");
+    if (!uid) {
+        throw new Error("getUser(): uid is required");
+    }
 
-    const [userDocSnap, fundsSnap] = await Promise.all([
-        db.collection(USERS_COLLECTION).doc(uid).get(),
-        db.collection(FUNDS_COLLECTION).where("uid", "==", uid).limit(1).get()
-    ]);
+    try {
+        // Fetch Firestore user doc, funds doc, and Auth record in parallel for efficiency
+        const [userDocSnap, fundsSnap, authRecord] = await Promise.all([
+            db.collection(USERS_COLLECTION).doc(uid).get(),
+            db.collection(FUNDS_COLLECTION).where("uid", "==", uid).limit(1).get(),
+            admin.auth().getUser(uid)
+        ]);
 
-    if (!userDocSnap.exists) return null;
+        // If the primary user document in Firestore doesn't exist, the user is considered not found.
+        if (!userDocSnap.exists) {
+            return null;
+        }
 
-    const userData = { id: userDocSnap.id, ...userDocSnap.data() };
-    const balance = fundsSnap.empty ? 0 : fundsSnap.docs[0].data().balance || 0;
-    return { ...userData, balance };
+        const userData = { id: userDocSnap.id, ...userDocSnap.data() };
+        
+        // Extract balance from the funds document
+        const balance = fundsSnap.empty ? 0 : fundsSnap.docs[0].data().balance || 0;
+
+        // Extract email and derive the mobile number from the Auth record
+        const email = authRecord.email || "";
+        const mobile = email.includes("@") ? email.split("@")[0] : (authRecord.phoneNumber || "N/A");
+
+        // Combine all data into a single, comprehensive user object
+        return {
+            ...userData,
+            balance,
+            mobile
+        };
+    } catch (error) {
+        console.error(`Error fetching user data for UID ${uid}:`, error);
+        // If any of the fetches fail (e.g., user not in Auth), return null.
+        return null;
+    }
 };
 
 /**
