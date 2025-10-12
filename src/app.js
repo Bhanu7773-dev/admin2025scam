@@ -18,8 +18,10 @@ import { verifyFirebaseIdToken } from './plugins/firebaseAuth.js';
 const app = Fastify({ logger: false });
 
 // Register the CORS plugin
+const allowedOrigins = (process.env.ALLOWED_ORIGINS && process.env.ALLOWED_ORIGINS.split(',')) || ["http://localhost:3000", "http://localhost:4000"];
+
 app.register(cors, {
-  origin: ["http://localhost:3000", "http://localhost:4000"],
+  origin: allowedOrigins,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
   credentials: true,
 });
