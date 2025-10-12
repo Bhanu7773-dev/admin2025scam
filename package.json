@@ -1,7 +1,7 @@
 {
 	"type": "module",
 	"scripts": {
-		"dev": "pnpx nodemon ./src/index.js",
+		"dev": "pnpx nodemon ./src/server.js",
 		"dev:css": "tailwindcss -i ./src/styles/tailwind.css -o ./public/css/tailwind.css --watch"
 	},
 	"dependencies": {
@@ -16,4 +16,4 @@
 		"nodemon": "^3.1.10",
 		"tailwindcss": "^4.1.14"
 	}
-}  
+} 

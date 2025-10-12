@@ -2,6 +2,6 @@
   "watch": ["src", "views"],
   "ext": "js,json,ejs",
   "ignore": ["node_modules"],
-  "exec": "node src/index.js"
+  "exec": "node src/server.js"
 }
  
