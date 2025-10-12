@@ -18,7 +18,8 @@ import { verifyFirebaseIdToken } from './plugins/firebaseAuth.js';
 const app = Fastify({ logger: false });
 
 // Register the CORS plugin
-const allowedOrigins = (process.env.ALLOWED_ORIGINS && process.env.ALLOWED_ORIGINS.split(',')) || ["http://localhost:3000", "http://localhost:4000"];
+// const allowedOrigins = (process.env.ALLOWED_ORIGINS && process.env.ALLOWED_ORIGINS.split(',')) || ["http://localhost:3000", "http://localhost:4000"];
+const allowedOrigins = ["https://sara-temp-9e2b.vercel.app"];
 
 app.register(cors, {
   origin: allowedOrigins,
