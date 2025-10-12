@@ -1,0 +1,48 @@
+<div class="text-white w-[18em] h-screen max-h-screen overflow-x-hidden lg:z-10 relative overflow-y-auto flex flex-col max-lg:absolute" id="sidebar">
+    <div class="pt-4 pb-9 max-lg:opacity-0 lg:bg-[#2a3042]">
+        <h3 class="bg-[orange] mx-auto text-black w-fit px-2 py-1 text-2xl font-semibold">matka</h3>
+    </div>
+    <ul class="flex h-full flex-col px-8 *:py-3 text-white bg-[#2a3042] max-lg:hidden">
+        <li>
+            <a href="/dashboard" class="block w-full">Dashboard</a>
+        </li>
+        <li>
+            <a href="/users" class="block w-full">User Management</a>
+        </li>
+
+        <li class="w-full">
+            <button id="wallet-toggle" class="flex items-center justify-between w-full focus:outline-none">
+                <span>Wallet Management</span>
+                <svg id="wallet-arrow" class="w-4 h-4 transition-transform duration-200" fill="none"
+                    stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+            </button>
+
+            <ul id="wallet-submenu"
+                class="ml-4 mt-4 overflow-hidden max-h-0 transition-all duration-300 ease-in-out flex flex-col *:py-2 text-gray-300">
+                <li><a href="/wallet/overview" class="block">Fund Request</a></li>
+                <li><a href="/wallet/payouts" class="block">Withdraw Request</a></li>
+            </ul>
+        </li>
+    </ul>
+
+    <script>
+        const walletToggle = document.getElementById("wallet-toggle");
+        const walletSubmenu = document.getElementById("wallet-submenu");
+        const walletArrow = document.getElementById("wallet-arrow");
+
+        walletToggle.addEventListener("click", () => {
+            const isOpen = walletSubmenu.classList.toggle("open");
+
+            if (isOpen) {
+                walletSubmenu.style.maxHeight = walletSubmenu.scrollHeight + "px";
+                walletArrow.classList.add("rotate-180");
+            } else {
+                walletSubmenu.style.maxHeight = 0;
+                walletArrow.classList.remove("rotate-180");
+            }
+        });
+    </script>
+
+</div>

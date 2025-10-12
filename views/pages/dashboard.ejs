@@ -1,0 +1,141 @@
+<div class="grid grid-cols-12 max-lg:grid-cols-1 grid-rows-5 gap-4  ">
+  <div class="col-span-4 row-span-4">
+    <div class="shadow-lg">
+      <div class="flex justify-between bg-[#D7D7F9] text-[#556ee6] rounded-t-md">
+        <div class="space-y-2 p-5">
+          <h4 class="text-xl font-medium">Welcome Back!</h4>
+          <p>Admin Dashboard</p>
+        </div>
+        <img src="/public/images/header.png" alt="header-illustration1" class="max-h-[8em] object-contain">
+      </div>
+      <div class="relative grid grid-cols-3 gap-4 bg-[#F9CCD6] rounded-b-md pb-28">
+        <img src="https://avatar.iran.liara.run/public/89" alt="Admin"
+          class="size-20 -top-10 left-8 border-[6px] rounded-full border-white absolute">
+        <div class="mt-15 pl-8">
+          <h4 class="text-xl mb-2">matka</h4>
+          <p class="text-zinc-500">Admin</p>
+        </div>
+        <div class="mt-6 space-y-2">
+          <h4 class="text-xl">0</h4>
+          <p class="text-zinc-500">Unapproved Users</p>
+        </div>
+        <div class="mt-6 space-y-2">
+          <h4 class="text-xl">0</h4>
+          <p class="text-zinc-500">Approved Users</p>
+        </div>
+      </div>
+    </div>
+    <div class="shadow-lg p-5 flex flex-col space-y-4">
+      <h3 class="font-semibold text-xl">Market Bid Details</h3>
+
+      <span class="text-zinc-500 text-sm">Game Name</span>
+      <select id="marketSelect" class="border rounded-md p-2">
+        <% for (const [marketName, details] of Object.entries(data.market_detail)) { %>
+          <option value="<%= marketName %>">
+            <%= marketName %>
+          </option>
+          <% } %>
+      </select>
+
+      <div id="marketInfo">
+        <span id="marketAmount" class="text-3xl">
+          <%= Object.values(data.market_detail)[0].amount %>
+        </span>
+        <p class="text-zinc-500 text-sm">Market Amount</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-span-8 row-span-5">
+    <div class="grid lg:grid-cols-3 lg:grid-rows-2 gap-7">
+      <div class="p-8 flex items-stretch rounded-md bg-[#BFCFFC] row-span-1">
+        <div class="flex flex-1 flex-col justify-between">
+          <h1 class="font-medium ">Active Users</h1>
+          <p class="text-xl text-zinc-500">
+            <%= data.users.length %>
+          </p>
+        </div>
+        <div class="size-15 my-auto rounded-full bg-indigo-500">
+        </div>
+      </div>
+      <div class="p-8 flex items-stretch rounded-md bg-[#BFCFFC] row-span-1">
+        <div class="flex flex-1 flex-col justify-between">
+          <h1 class="font-medium ">New Users</h1>
+          <p class="text-xl text-zinc-500">
+            <%= data.stats.newUsersCount %>
+          </p>
+        </div>
+        <div class="size-15 my-auto rounded-full bg-indigo-500">
+        </div>
+      </div>
+      <div class="p-8 flex items-stretch rounded-md bg-[#BFCFFC] row-span-1">
+        <div class="flex flex-1 flex-col justify-between">
+          <h1 class="font-medium ">Users</h1>
+          <p class="text-xl text-zinc-500">
+            <%= data.users.length %>
+          </p>
+        </div>
+        <div class="size-15 my-auto rounded-full bg-indigo-500">
+        </div>
+      </div>
+      <div class="p-8 flex items-stretch rounded-md bg-[#F8B4B2] row-span-1">
+        <div class="flex flex-1 flex-col justify-between">
+          <h1 class="font-medium ">Games</h1>
+          <p class="text-xl text-zinc-500">20</p>
+        </div>
+        <div class="size-15 my-auto rounded-full bg-indigo-500">
+        </div>
+      </div>
+      <div class="p-8 flex items-stretch rounded-md bg-[#FAD1B3] row-span-1">
+        <div class="flex flex-1 flex-col justify-between">
+          <h1 class="font-medium ">Bid Amount</h1>
+          <p class="text-xl text-zinc-500">
+            <%= data.stats.totalBiddingAmount %>
+          </p>
+        </div>
+        <div class="size-15 my-auto rounded-full bg-indigo-500">
+        </div>
+      </div>
+    </div>
+    <div class="shadow-lg">
+      <div class="flex items-center justify-between gap-5">
+        <div class="flex flex-col gap-4">
+          <span class="text-zinc-500 text-sm">Game Name</span>
+          <select id="marketSelect" class="border rounded-md p-2">
+            <% for (const [marketName, details] of Object.entries(data.market_detail)) { %>
+              <option value="<%= marketName %>">
+                <%= marketName %>
+              </option>
+              <% } %>
+          </select>
+        </div>
+        <div class="flex flex-col gap-4">
+          <span class="text-zinc-500 text-sm">Game Name</span>
+          <select id="marketSelect" class="border rounded-md p-2">
+            <% for (const [marketName, details] of Object.entries(data.market_detail)) { %>
+              <option value="<%= marketName %>">
+                <%= marketName %>
+              </option>
+              <% } %>
+          </select>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+
+<script>
+  // Pass market data from server to JS
+  const marketData = <% - JSON.stringify(data.market_detail) %>;
+
+  const select = document.getElementById('marketSelect');
+  const amountEl = document.getElementById('marketAmount');
+
+  // Listen for dropdown changes
+  select.addEventListener('change', () => {
+    const selectedMarket = select.value;
+    const selectedData = marketData[selectedMarket];
+    amountEl.textContent = selectedData ? selectedData.amount : 0;
+  });
+</script>

@@ -1,159 +1,344 @@
-import { db, admin } from "../plugins/firebase.js"
+import { db, admin } from "../plugins/firebase.js";
 
+/**
+ * Helper to batch an array into smaller chunks for Firestore 'in' queries.
+ * @param {Array<any>} arr The array to chunk.
+ * @param {number} size The size of each chunk.
+ * @returns {Array<Array<any>>} An array of chunked arrays.
+ */
+const _chunkArray = (arr, size) => {
+  const chunks = [];
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size));
+  }
+  return chunks;
+};
+
+/**
+ * A private helper to fetch Firebase Auth records for a given list of UIDs.
+ * This is optimized to handle large lists by batching requests.
+ * @param {string[]} uids - An array of user UIDs.
+ * @returns {Promise<Map<string, object>>} A Map where keys are UIDs and values are user auth data.
+ */
+const _fetchAuthInfoByUids = async (uids) => {
+    const authMap = new Map();
+    if (!uids || uids.length === 0) {
+        return authMap;
+    }
+    const uidChunks = _chunkArray(uids, 100); // Firebase Auth `getUsers` limit is 100
+    for (const chunk of uidChunks) {
+        try {
+            const userRecords = await admin.auth().getUsers(chunk.map(uid => ({ uid })));
+            for (const userRecord of userRecords.users) {
+                const email = userRecord.email || "";
+                const phone = email.includes("@") ? email.split("@")[0] : (userRecord.phoneNumber || "N/A");
+                authMap.set(userRecord.uid, {
+                    username: userRecord.displayName || "User",
+                    email,
+                    mobile: phone,
+                });
+            }
+        } catch (error) {
+            console.error("Error fetching a batch of user auth records:", error);
+        }
+    }
+    return authMap;
+};
+
+/**
+ * Fetches all withdrawal requests and enriches them with user information.
+ * @returns {Promise<{fund_withdrawl: Array<object>}>} A promise that resolves to an object containing the list of withdrawals.
+ */
 export const getAllWithdrawals = async () => {
-  const withdrawlSnapshot = await db.collection("withdrawl").get();
-  // Get all unique uids from withdrawl
-  const uids = withdrawlSnapshot.docs.map(doc => doc.data().uid).filter(Boolean);
-  // Fetch user info from Firebase Auth for each uid
-  const userInfoMap = {};
-  for (const uid of uids) {
-    try {
-      const userRecord = await admin.auth().getUser(uid);
-      userInfoMap[uid] = {
-        username: userRecord.displayName || null,
-        phone: userRecord.phoneNumber || null,
-        email: userRecord.email || null
-      };
-    } catch (err) {
-      userInfoMap[uid] = { username: null, phone: null, email: null };
+    const withdrawlSnapshot = await db.collection("withdrawl").orderBy("createdAt", "desc").get();
+    if (withdrawlSnapshot.empty) {
+        return { fund_withdrawl: [] };
     }
-  }
-  const fundWithdrawals = withdrawlSnapshot.docs.map(doc => {
-    const data = doc.data();
-    const info = userInfoMap[data.uid] || { username: null, phone: null, email: null };
-    let createdDate = null;
-    if (data.createdAt?.toDate) {
-      const dateObj = data.createdAt.toDate();
-      createdDate = dateObj.toISOString().slice(0, 10);
-    } else if (data.createdAt) {
-      createdDate = typeof data.createdAt === 'string' ? data.createdAt.slice(0, 10) : null;
-    }
-    return {
-      username: info.username || 'user',
-      no: info.email || '',
-      amount: data.amount || null,
-      createdAt: createdDate,
-      status: data.status || null
-    };
-  });
-  return { fund_withdrawl: fundWithdrawals };
-}
 
+    const withdrawDocs = withdrawlSnapshot.docs.map(doc => doc.data());
+    const uids = [...new Set(withdrawDocs.map(doc => doc.uid).filter(Boolean))];
+    const userInfoMap = await _fetchAuthInfoByUids(uids);
+
+    const fundWithdrawals = withdrawDocs.map(data => {
+        const info = userInfoMap.get(data.uid) || { username: "User", mobile: "N/A", email: "" };
+        const createdDate = data.createdAt?.toDate?.().toISOString().slice(0, 10) || null;
+
+        return {
+            username: info.username,
+            no: info.email, // 'no' maps to email in your original code
+            mobile: info.mobile,
+            amount: data.amount || 0,
+            createdAt: createdDate,
+            status: data.status || "pending"
+        };
+    });
+
+    return { fund_withdrawl: fundWithdrawals };
+};
+
+/**
+ * Fetches the fund details for a single user by their UID.
+ * @param {object} params - The parameters for the function.
+ * @param {string} params.uuid - The user's UID.
+ * @returns {Promise<object>} A promise that resolves to the user's fund information.
+ */
 export const getFundsOfUser = async ({ uuid }) => {
-  if (!uuid) throw new Error("getFundsOfUser(): uuid is required")
+    if (!uuid) throw new Error("getFundsOfUser(): uuid is required");
 
-  const snapshot = await db.collection("funds").where("uid", "==", uuid).limit(1).get()
+    const snapshot = await db.collection("funds").where("uid", "==", uuid).limit(1).get();
+    if (snapshot.empty) {
+        return { balance: 0, uid: uuid };
+    }
 
-  if (snapshot.empty) return { balance: 0, uid }
+    const doc = snapshot.docs[0];
+    const data = doc.data();
 
-  const doc = snapshot.docs[0]
-  const data = doc.data()
+    return {
+        uuid: doc.id,
+        balance: data.balance || 0,
+        createdAt: data.createdAt?.toDate?.() || null,
+        updatedAt: data.updatedAt?.toDate?.() || null,
+        lastSyncAt: data.lastSyncAt?.toDate?.() || null,
+        lastUpdateReason: data.lastUpdateReason || null
+    };
+};
 
-  return {
-    uuid: doc.id,
-    balance: data.balance || 0,
-    createdAt: data.createdAt?.toDate?.() || null,
-    updatedAt: data.updatedAt?.toDate?.() || null,
-    lastSyncAt: data.lastSyncAt?.toDate?.() || null,
-    lastUpdateReason: data.lastUpdateReason || null
-  }
-
-}
-
+/**
+ * Fetches and aggregates all fund requests (deposits) and withdrawals.
+ * @returns {Promise<object>} An object containing lists and total amounts for requests and withdrawals.
+ */
 export const getAllFunds = async () => {
-  // fund requests
-  const depositsSnap = await db.collection("deposits").get()
-  const depositDocs = depositsSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+    const [depositsSnap, withdrawSnap] = await Promise.all([
+        db.collection("deposits").orderBy("createdAt", "desc").get(),
+        db.collection("withdrawl").orderBy("createdAt", "desc").get()
+    ]);
 
-  // get all unique uids
-  const uids = [...new Set(depositDocs.map(d => d.uid).filter(Boolean))]
+    const depositDocs = depositsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const withdrawDocs = withdrawSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    
+    const allUids = [...new Set([...depositDocs.map(d => d.uid), ...withdrawDocs.map(d => d.uid)].filter(Boolean))];
+    const userInfoMap = await _fetchAuthInfoByUids(allUids);
 
-  // fetch user info from auth
-  const userInfoMap = {}
-  for (const uid of uids) {
-    try {
-      const user = await admin.auth().getUser(uid)
-      const email = user.email || ""
-      const phone = email.includes("@") ? email.split("@")[0] : ""
-      userInfoMap[uid] = {
-        username: user.displayName || "User",
-        mobile: phone || user.phoneNumber || "",
-      }
-    } catch {
-      userInfoMap[uid] = { username: "User", mobile: "" }
-    }
-  }
+    const fundRequests = depositDocs.map((d, i) => {
+        const info = userInfoMap.get(d.uid) || { username: "User", mobile: "" };
+        const date = d.createdAt?.toDate?.().toISOString().slice(0, 10) || null;
+        return {
+            index: i + 1,
+            username: info.username,
+            mobile: info.mobile,
+            amount: d.amount || 0,
+            requestNo: d.requestNo || d.id,
+            date,
+            status: d.status || "pending",
+        };
+    });
 
-  const fundRequests = depositDocs.map((d, i) => {
-    const info = userInfoMap[d.uid] || {}
-    const createdAt =
-      d.createdAt?.toDate?.().toISOString().slice(0, 10) || null
+    const fundWithdrawals = withdrawDocs.map((d, i) => {
+        const info = userInfoMap.get(d.uid) || { username: "User", mobile: "" };
+        const date = d.createdAt?.toDate?.().toISOString().slice(0, 10) || null;
+        return {
+            index: i + 1,
+            username: info.username,
+            mobile: info.mobile,
+            amount: d.amount || 0,
+            requestNo: d.withdrawalId || d.id,
+            date,
+            status: d.status || "pending",
+        };
+    });
 
-    return {
-      index: i + 1,
-      username: info.username,
-      mobile: info.mobile,
-      amount: d.amount || 0,
-      requestNo: d.requestNo || d.id,
-      date: createdAt,
-      status: d.status || "",
-    }
-  })
-
-  const totalFundRequestAmount = fundRequests.reduce(
-    (s, r) => s + (r.amount || 0),
-    0
-  )
-
-  // withdrawls
-  const withdrawSnap = await db.collection("withdrawl").get()
-  const withdrawDocs = withdrawSnap.docs.map(d => ({ id: d.id, ...d.data() }))
-  const withdrawUids = [...new Set(withdrawDocs.map(d => d.uid).filter(Boolean))]
-
-  const withdrawUserInfoMap = {}
-  for (const uid of withdrawUids) {
-    try {
-      const user = await admin.auth().getUser(uid)
-      const email = user.email || ""
-      const phone = email.includes("@") ? email.split("@")[0] : ""
-      withdrawUserInfoMap[uid] = {
-        username: user.displayName || "User",
-        mobile: phone || user.phoneNumber || "",
-      }
-    } catch {
-      withdrawUserInfoMap[uid] = { username: "User", mobile: "" }
-    }
-  }
-
-  const fundWithdrawals = withdrawDocs.map((d, i) => {
-    const info = withdrawUserInfoMap[d.uid] || {}
-    const createdAt =
-      d.createdAt?.toDate?.().toISOString().slice(0, 10) || null
+    const totalFundRequestAmount = fundRequests.reduce((sum, r) => sum + r.amount, 0);
+    const totalFundWithdrawalAmount = fundWithdrawals.reduce((sum, r) => sum + r.amount, 0);
 
     return {
-      index: i + 1,
-      username: info.username,
-      mobile: info.mobile,
-      amount: d.amount || 0,
-      requestNo: d.withdrawalId || d.id,
-      date: createdAt,
-      status: d.status || "",
+        fund_requests: { total_amount: totalFundRequestAmount, list: fundRequests },
+        fund_withdrawals: { total_amount: totalFundWithdrawalAmount, list: fundWithdrawals },
+    };
+};
+
+/**
+ * Gets all fund transactions (credit/debit) for a specific user UID.
+ * @param {object} params - The parameters for the function.
+ * @param {string} params.uuid - The user's UID to fetch transactions for.
+ * @returns {Promise<Array<object>>} A promise that resolves to an array of transaction objects.
+ */
+export const getFundTransactionsForUser = async ({ uuid }) => {
+    if (!uuid) {
+        throw new Error("getFundTransactionsForUser(): uuid is required");
     }
-  })
+    const q = db.collection("funds_transactions").where("uid", "==", uuid).orderBy("timestamp", "desc");
+    const snapshot = await q.get();
+    if (snapshot.empty) {
+        return [];
+    }
+    return snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+            id: doc.id,
+            ...data,
+            timestamp: data.timestamp?.toDate?.().toISOString() || null,
+        };
+    });
+};
 
-  const totalFundWithdrawlAmount = fundWithdrawals.reduce(
-    (s, r) => s + (r.amount || 0),
-    0
-  )
+/**
+ * Updates the status of a fund request (deposit) to 'approved' or 'rejected'.
+ * Uses a transaction to ensure balance and logs are updated atomically on approval.
+ * @param {object} params - The parameters for the function.
+ * @param {string} params.requestId - The ID of the deposit document to update.
+ * @param {'approved' | 'rejected'} params.newStatus - The new status to set.
+ * @returns {Promise<{success: boolean, message: string}>} A promise that resolves on completion.
+ */
+export const updateFundRequestStatus = async ({ requestId, newStatus }) => {
+    if (!requestId) throw new Error("updateFundRequestStatus(): requestId is required.");
+    if (newStatus !== 'approved' && newStatus !== 'rejected') throw new Error("Invalid status. Must be 'approved' or 'rejected'.");
 
-  return {
-    fund_requests: {
-      total_amount: totalFundRequestAmount,
-      list: fundRequests,
-    },
-    fund_withdrawals: {
-      total_amount: totalFundWithdrawlAmount,
-      list: fundWithdrawals,
-    },
-  }
-}
+    const depositRef = db.collection('deposits').doc(requestId);
+    if (newStatus === 'rejected') {
+        await depositRef.update({ status: 'rejected' });
+        return { success: true, message: 'Request rejected successfully.' };
+    }
+
+    try {
+        await db.runTransaction(async (t) => {
+            const depositDoc = await t.get(depositRef);
+            if (!depositDoc.exists) throw new Error("Deposit request document not found.");
+            
+            const depositData = depositDoc.data();
+            if (depositData.status !== 'pending') throw new Error(`Request has already been ${depositData.status}.`);
+
+            const { uid, amount } = depositData;
+            if (!uid || typeof amount !== 'number') throw new Error("Request is missing 'uid' or 'amount'.");
+
+            const fundsQuery = db.collection('funds').where('uid', '==', uid).limit(1);
+            const fundsSnapshot = await t.get(fundsQuery);
+            if (fundsSnapshot.empty) throw new Error(`Funds document for user ${uid} not found.`);
+
+            const fundsDocRef = fundsSnapshot.docs[0].ref;
+            const fundsData = fundsSnapshot.docs[0].data();
+            const balanceBefore = fundsData.balance || 0;
+            const balanceAfter = balanceBefore + amount;
+
+            const logRef = db.collection('funds_transactions').doc();
+            t.set(logRef, {
+                uid, amount, balanceBefore, balanceAfter, type: 'credit',
+                reason: `Deposit Approved - Ref: ${requestId}`,
+                timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            });
+
+            t.update(fundsDocRef, { balance: balanceAfter });
+            t.update(depositRef, { status: 'approved' });
+        });
+        return { success: true, message: 'Request approved and funds added successfully.' };
+    } catch (error) {
+        console.error("Fund request approval transaction failed: ", error);
+        throw new Error(`Failed to approve request: ${error.message}`);
+    }
+};
+
+/**
+ * Updates the status of a withdrawal request to 'approved' or 'rejected'.
+ * On approval, it debits the user's account within a transaction.
+ * @param {object} params - The parameters for the function.
+ * @param {string} params.requestId - The ID of the 'withdrawl' document to update.
+ * @param {'approved' | 'rejected'} params.newStatus - The new status to set.
+ * @returns {Promise<{success: boolean, message: string}>} A promise that resolves on completion.
+ */
+export const updateWithdrawalRequestStatus = async ({ requestId, newStatus }) => {
+    if (!requestId) throw new Error("updateWithdrawalRequestStatus(): requestId is required.");
+    if (newStatus !== 'approved' && newStatus !== 'rejected') throw new Error("Invalid status. Must be 'approved' or 'rejected'.");
+
+    const withdrawlRef = db.collection('withdrawl').doc(requestId);
+    if (newStatus === 'rejected') {
+        await withdrawlRef.update({ status: 'rejected' });
+        return { success: true, message: 'Withdrawal request rejected successfully.' };
+    }
+
+    try {
+        await db.runTransaction(async (t) => {
+            const withdrawlDoc = await t.get(withdrawlRef);
+            if (!withdrawlDoc.exists) throw new Error("Withdrawal request document not found.");
+
+            const withdrawlData = withdrawlDoc.data();
+            if (withdrawlData.status !== 'pending') throw new Error(`Request has already been ${withdrawlData.status}.`);
+            
+            const { uid, amount } = withdrawlData;
+            if (!uid || typeof amount !== 'number') throw new Error("Request is missing 'uid' or a valid 'amount'.");
+
+            const fundsQuery = db.collection('funds').where('uid', '==', uid).limit(1);
+            const fundsSnapshot = await t.get(fundsQuery);
+            if (fundsSnapshot.empty) throw new Error(`Funds document for user ${uid} not found.`);
+
+            const fundsDocRef = fundsSnapshot.docs[0].ref;
+            const fundsData = fundsSnapshot.docs[0].data();
+            const balanceBefore = fundsData.balance || 0;
+
+            if (balanceBefore < amount) throw new Error("Insufficient funds to approve withdrawal.");
+            
+            const balanceAfter = balanceBefore - amount;
+            const logRef = db.collection('funds_transactions').doc();
+            t.set(logRef, {
+                uid, amount, balanceBefore, balanceAfter, type: 'debit',
+                reason: `Withdrawal Approved - Ref: ${requestId}`,
+                timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            });
+
+            t.update(fundsDocRef, { balance: balanceAfter });
+            t.update(withdrawlRef, { status: 'approved' });
+        });
+        return { success: true, message: 'Withdrawal approved and funds debited successfully.' };
+    } catch (error) {
+        console.error("Withdrawal approval transaction failed: ", error);
+        throw new Error(`Failed to approve withdrawal: ${error.message}`);
+    }
+};
+
+/**
+ * Atomically updates a user's balance and creates a transaction log.
+ * Can be used for both adding (credit) and subtracting (debit) funds.
+ * @param {object} params The parameters for the transaction.
+ * @param {string} params.uid The user's Authentication UID.
+ * @param {number} params.amount The amount to add (positive) or subtract (negative).
+ * @param {string} params.reason A description of why the balance is being changed (e.g., "Admin Credit").
+ * @returns {Promise<{success: boolean, message: string}>} The result of the operation.
+ */
+export const updateUserBalance = async ({ uid, amount, reason }) => {
+    if (!uid) throw new Error("updateUserBalance(): uid is required.");
+    if (typeof amount !== 'number' || amount === 0) throw new Error("Amount must be a non-zero number.");
+    if (!reason) throw new Error("A reason for the transaction is required.");
+
+    const fundsQuery = db.collection('funds').where('uid', '==', uid).limit(1);
+
+    try {
+        await db.runTransaction(async (t) => {
+            const fundsSnapshot = await t.get(fundsQuery);
+            if (fundsSnapshot.empty) throw new Error(`Funds document for user ${uid} not found.`);
+
+            const fundsDocRef = fundsSnapshot.docs[0].ref;
+            const fundsData = fundsSnapshot.docs[0].data();
+            const balanceBefore = fundsData.balance || 0;
+            const balanceAfter = balanceBefore + amount;
+
+            if (balanceAfter < 0) {
+                throw new Error("Insufficient funds for this operation.");
+            }
+
+            const logRef = db.collection('funds_transactions').doc();
+            t.set(logRef, {
+                uid,
+                amount: Math.abs(amount),
+                balanceBefore,
+                balanceAfter,
+                type: amount > 0 ? 'credit' : 'debit',
+                reason,
+                timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            });
+
+            t.update(fundsDocRef, { balance: balanceAfter });
+        });
+        return { success: true, message: `Balance updated successfully.` };
+    } catch (error) {
+        console.error("Update balance transaction failed:", error);
+        throw new Error(`Failed to update balance: ${error.message}`);
+    }
+};
