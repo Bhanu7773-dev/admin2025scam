@@ -101,7 +101,7 @@ export const getDashboard = async () => {
   const totalDeclined = await getTotalWithdrawals("declined")
   const totalCompleted = await getTotalWithdrawals("completed")
 
-  const totalGames = (await getAllGames()).length()
+  const totalGames = (await getAllGames()).length
 
   return {
     admins,
