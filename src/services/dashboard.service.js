@@ -1,4 +1,5 @@
 import { db } from "../plugins/firebase.js"
+import { getAllGames } from "./games.service.js"
 import { getAllUsers } from "./users.service.js"
 import { getTotalWithdrawals } from "./withdrawl.service.js"
 
@@ -100,9 +101,12 @@ export const getDashboard = async () => {
   const totalDeclined = await getTotalWithdrawals("declined")
   const totalCompleted = await getTotalWithdrawals("completed")
 
+  const totalGames = (await getAllGames()).length()
+
   return {
     admins,
     users: normalUsers,
+    gamesCount: totalGames,
     stats: {
       totalBiddingAmount,
       totalWinningAmount,
