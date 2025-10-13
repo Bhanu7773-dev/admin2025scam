@@ -1,5 +1,5 @@
 import { admin } from "../plugins/firebase.js";
-import { sendNotification, sendMulticastNotification } from "../services/notification.service.js";
+import { sendNotification, sendMulticastNotification, sendNotificationToAll } from "../services/notification.service.js";
 
 /**
  * Handler to send a push notification to a single user or all users.
@@ -30,7 +30,8 @@ export async function sendNotificationHandler(request, reply) {
                 return reply.send({ success: true, message: "No users with notification tokens found." });
             }
 
-            const result = await sendMulticastNotification({ tokens, title, body });
+            // const result = await sendMulticastNotification({ tokens, title, body });
+            const result = await sendNotificationToAll({ title, body });
             return reply.send({ success: true, message: `Broadcast sent to ${tokens.length} tokens.`, ...result });
         }
 
