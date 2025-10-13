@@ -121,22 +121,48 @@ const parseOverrideResult = (resultStr) => {
     return { digit, panna };
 };
 
+// --- THIS IS THE CORRECTED FUNCTION ---
 function normalizePayoutRates(flatRates) {
+    /**
+     * Calculates the payout multiplier based on the stored rates.
+     * The logic is (Win Amount / Bet Amount).
+     * Based on the Firestore structure:
+     * - `min_value` is the 'Bet Amount' (e.g., 10)
+     * - `max_value` is the 'Win Amount' (e.g., 95)
+     * The multiplier is therefore `max_value / min_value`.
+     */
+    const calculateRate = (betKey, winKey) => {
+        const betAmount = flatRates[betKey];
+        const winAmount = flatRates[winKey];
+
+        // THE FIX: Correctly calculate the rate as (Win Amount / Bet Amount)
+        // Also, check if the betAmount is valid to prevent division by zero.
+        if (betAmount && betAmount > 0 && winAmount) {
+            return winAmount / betAmount;
+        }
+
+        // Fallback to a default rate of 1 if the numbers are invalid or zero.
+        console.warn(`Invalid rate calculation for keys ${betKey}, ${winKey}. Defaulting to 1.`);
+        return 1;
+    };
+
     const rateMap = {
-        "Single Digits": flatRates.single_digit_2,
-        "Jodi": flatRates.jodi_digit_2,
-        "Single Pana": flatRates.single_pana_2,
-        "Double Pana": flatRates.double_pana_2,
-        "Triple Pana": flatRates.triple_pana_2,
-        "Half Sangam A": flatRates.half_sangam_2,
-        "Half Sangam B": flatRates.half_sangam_2,
-        "Full Sangam": flatRates.full_sangam_2,
-        "Red Bracket": flatRates.jodi_digit_2,
-        "Group Jodi": flatRates.jodi_digit_2,
+        "Single Digits": calculateRate('single_digit_1', 'single_digit_2'),
+        "Jodi":          calculateRate('jodi_digit_1', 'jodi_digit_2'),
+        "Single Pana":   calculateRate('single_pana_1', 'single_pana_2'),
+        "Double Pana":   calculateRate('double_pana_1', 'double_pana_2'),
+        "Triple Pana":   calculateRate('triple_pana_1', 'triple_pana_2'),
+        "Half Sangam A": calculateRate('half_sangam_1', 'half_sangam_2'),
+        "Half Sangam B": calculateRate('half_sangam_1', 'half_sangam_2'),
+        "Full Sangam":   calculateRate('full_sangam_1', 'full_sangam_2'),
+        "Red Bracket":   calculateRate('jodi_digit_1', 'jodi_digit_2'), // Uses Jodi rate
+        "Group Jodi":    calculateRate('jodi_digit_1', 'jodi_digit_2'), // Uses Jodi rate
         "default": 1
     };
+    
     return Object.fromEntries(Object.entries(rateMap).filter(([, value]) => value !== undefined));
 }
+
 
 /**
  * Handler to declare a result and process all winning/losing bids for a specific game and date.
@@ -156,17 +182,14 @@ export async function declareResultHandler(request, reply) {
             return reply.code(400).send({ error: "Invalid 'date' format. Please use a valid date string like YYYY-MM-DD." });
         }
         
-        // Define the date range for the entire day to process
         const startDate = new Date(resultDate);
         startDate.setHours(0, 0, 0, 0);
 
         const endDate = new Date(resultDate);
         endDate.setHours(23, 59, 59, 999);
         
-        // Helper to calculate the single digit from a pana
         const sumDigits = (numStr) => String(numStr).split('').reduce((sum, digit) => sum + parseInt(digit, 10), 0) % 10;
 
-        // Construct the overrideList that processGameResults expects
         const overrideList = {
             [gameId]: {
                 firstHalf: `${sumDigits(openPana)}-${openPana}`,
@@ -174,7 +197,6 @@ export async function declareResultHandler(request, reply) {
             }
         };
 
-        // Call the main processing function with the override data
         const summary = await processGameResults({
             startDate,
             endDate,
@@ -204,7 +226,7 @@ export const processGameResults = async ({ startDate, endDate, overrideList = nu
         console.error("CRITICAL: Game rates could not be loaded from the database. Aborting.");
         throw new Error("Game rates are not configured.");
     }
-    console.log("Successfully loaded dynamic game rates for processing.");
+    console.log("Successfully loaded dynamic game rates for processing:", dynamicPayoutRates);
 
     const summary = { totalSubmissions: 0, processed: 0, won: 0, lost: 0, skipped: 0 };
 
@@ -333,7 +355,7 @@ export const processGameResults = async ({ startDate, endDate, overrideList = nu
                     summary.won++;
                     const payoutRate = dynamicPayoutRates[gameType] || dynamicPayoutRates['default'];
                     const winnings = bidAmount * payoutRate;
-                    const totalCredit = bidAmount + winnings;
+                    const totalCredit = winnings;
                     const fundsQuery = db.collection("funds").where("uid", "==", uid).limit(1);
                     const fundsSnapshot = await fundsQuery.get();
                     if (!fundsSnapshot.empty) {
@@ -369,10 +391,10 @@ export const processGameResults = async ({ startDate, endDate, overrideList = nu
  * This function is READ-ONLY and does not update the database.
  */
 export const getPrediction = async ({ gameId, date, type, openPanna, closePanna }) => {
-    if (!gameId || !date || !openPanna || !closePanna) {
+    if (!gameId || !date || !openPanna || !closePana) {
         throw new Error("Missing required parameters: gameId, date, openPanna, and closePanna are required.");
     }
-    console.log(`[Prediction] Running for ${gameId} on ${date.toDateString()} with result ${openPanna}-${closePanna}`);
+    console.log(`[Prediction] Running for ${gameId} on ${date.toDateString()} with result ${openPanna}-${closePana}`);
 
     const flatGameRates = await getGameRates();
     const dynamicPayoutRates = normalizePayoutRates(flatGameRates);
@@ -402,7 +424,7 @@ export const getPrediction = async ({ gameId, date, type, openPanna, closePanna 
     const dailyResult = {
         openPanna,
         closePanna,
-        jodi: `${sumDigits(openPanna)}${sumDigits(closePanna)}`,
+        jodi: `${sumDigits(openPanna)}${sumDigits(closePana)}`,
         isClosed: false,
     };
 
@@ -449,4 +471,3 @@ export const getPrediction = async ({ gameId, date, type, openPanna, closePanna 
     console.log(`[Prediction] Found ${winners.length} potential winners.`);
     return winners;
 };
-

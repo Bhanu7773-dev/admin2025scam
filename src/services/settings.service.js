@@ -1,7 +1,7 @@
 import { db, admin } from "../plugins/firebase.js";
 
 const SETTINGS_COLLECTION = "app_settings";
-const GAME_SETTINGS_COLLECTION = "game_settings"; // New collection constant
+const GAME_SETTINGS_COLLECTION = "game_settings";
 
 /**
  * Fetches all individual setting documents and combines them into a single object.
@@ -9,7 +9,7 @@ const GAME_SETTINGS_COLLECTION = "game_settings"; // New collection constant
  * @returns {Promise<object>} A promise that resolves to a single object containing all app settings.
  */
 export const getSettings = async () => {
-    // Define the specific documents that hold your settings
+    // 1. Define the main setting documents
     const settingDocs = [
         'maintenance',
         'min_withdrawal',
@@ -17,22 +17,38 @@ export const getSettings = async () => {
         'upi',
         'website'
     ];
+    const mainDocRefs = settingDocs.map(docId => db.collection(SETTINGS_COLLECTION).doc(docId));
+    
+    // 2. Define the separate share link document reference
+    const shareDocRef = db.collection("sharelink").doc("main");
 
-    const docRefs = settingDocs.map(docId => db.collection(SETTINGS_COLLECTION).doc(docId));
-    const docSnaps = await db.getAll(...docRefs);
+    // 3. Fetch all documents in parallel using Promise.all
+    const [mainDocSnaps, shareDocSnap] = await Promise.all([
+        db.getAll(...mainDocRefs),
+        shareDocRef.get()
+    ]);
 
+    // 4. Process the main settings
     const combinedSettings = {};
-    docSnaps.forEach(doc => {
+    mainDocSnaps.forEach(doc => {
         if (doc.exists) {
-            // Spread the data from each document into the single result object
             Object.assign(combinedSettings, doc.data());
         } else {
             console.warn(`Settings document "${doc.id}" was not found.`);
         }
     });
 
+    // 5. Process and add the share link setting
+    if (shareDocSnap.exists) {
+        // Map the 'url' field from Firestore to the 'shareLink' key for the client
+        combinedSettings.shareLink = shareDocSnap.data().url;
+    } else {
+        console.warn(`Share link document "main" was not found.`);
+    }
+
     return combinedSettings;
 };
+
 
 /**
  * Updates multiple setting documents in a single atomic transaction.
@@ -56,7 +72,7 @@ export const updateSettings = async (newSettings) => {
         description: newSettings.description,
         lastUpdated: serverTimestamp
     };
-    batch.set(maintenanceRef, maintenanceData, { merge: true }); // Use set with merge for safety
+    batch.set(maintenanceRef, maintenanceData, { merge: true });
 
     // 2. Minimum Withdrawal Setting
     const minWithdrawalRef = db.collection(SETTINGS_COLLECTION).doc('min_withdrawal');
@@ -98,7 +114,7 @@ export const updateSettings = async (newSettings) => {
         url: newSettings.shareLink,
         updatedAt: serverTimestamp 
     }
-     batch.set(shareRef, shareData, { merge: true });
+    batch.set(shareRef, shareData, { merge: true });
 
     try {
         await batch.commit();
