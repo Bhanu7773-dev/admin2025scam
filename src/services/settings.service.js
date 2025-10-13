@@ -92,6 +92,14 @@ export const updateSettings = async (newSettings) => {
     };
     batch.set(websiteRef, websiteData, { merge: true });
 
+    // 6. Share URL Setting
+    const shareRef = db.collection("sharelink").doc("main")
+    const shareData = {
+        url: newSettings.shareLink,
+        updatedAt: serverTimestamp 
+    }
+     batch.set(shareRef, shareData, { merge: true });
+
     try {
         await batch.commit();
         return { success: true, message: "Settings updated successfully." };
