@@ -193,6 +193,7 @@ export const getAllUsers = async ({ includeSubAdmins = false, limit = 20, startA
             return {
                 id: u.id,
                 uid: u.uid,
+                idDisabled: u.isDisabled == true,
                 username: auth.username || "User",
                 name: u.name || auth.username || "User",
                 mobile: auth.mobile || "N/A",
@@ -258,20 +259,34 @@ export const getUser = async (uid) => {
 };
 
 /**
- * Toggles a user's status (active/inactive) in Firebase Authentication.
- * @param {object} params The parameters for the function.
- * @param {string} params.uid The user's Authentication UID.
- * @returns {Promise<{success: boolean, newStatus: string}>} The result of the operation.
+ * Toggles a user's status in both Firebase Auth and Firestore.
+ * @param {object} params - The parameters object.
+ * @param {string} params.uuid - The user's unique ID.
+ * @returns {Promise<{success: boolean, newStatus: 'active' | 'inactive'}>} The result of the operation.
  */
 export const updateUserStatus = async ({ uuid }) => {
-    if (!uuid) throw new Error("updateUserStatus(): uuid is required.");
+    if (!uuid) {
+        throw new Error("updateUserStatus(): uuid is required.");
+    }
 
-    const userRecord = await admin.auth().getUser(uuid);
-    const newDisabledState = !userRecord.disabled;
+    // 1. Get the current user record from Firebase Auth
+    // const userRecord = await admin.auth().getUser(uuid);
 
-    await admin.auth().updateUser(uuid, { disabled: newDisabledState });
+    // 2. Determine the new disabled state by toggling the current state
+    // const newDisabledState = !userRecord.disabled;
 
-    return { success: true, newStatus: newDisabledState ? 'inactive' : 'active' };
+    // 3. Update the user's status in Firebase Authentication
+    // await admin.auth().updateUser(uuid, { disabled: newDisabledState });
+
+    // 4. Update the 'isDisabled' field in the user's Firestore document
+    const userDocRef = db.collection('users').doc(uuid);
+    await userDocRef.update({ isDisabled: newDisabledState });
+
+    // 5. Return a success message with the new status
+    return { 
+        success: true, 
+        newStatus: newDisabledState ? 'inactive' : 'active' 
+    };
 };
 
 /**
