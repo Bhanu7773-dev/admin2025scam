@@ -1,4 +1,4 @@
-import cheerio from "cheerio";
+import * as cheerio from "cheerio";
 
 class MatkaService {
     static baseUrl = "https://sattamatkano1.me";

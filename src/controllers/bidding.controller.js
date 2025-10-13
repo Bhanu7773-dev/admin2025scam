@@ -105,6 +105,29 @@ export async function getPredictionHandler(request, reply) {
     }
 }
 
+
+/**
+ * Handler to update the details of a specific bid.
+ * @route PATCH /biddings/:id
+ */
+export async function updateBiddingHandler(request, reply) {
+    try {
+        const { id } = request.params;
+        const updateData = request.body;
+
+        if (!updateData || Object.keys(updateData).length === 0) {
+            return reply.code(400).send({ error: "Request body must contain fields to update." });
+        }
+
+        const result = await biddingService.updateBidding({ bidId: id, data: updateData });
+        return reply.send(result);
+
+    } catch (error) {
+        console.error(`Error in updateBiddingHandler for bid ${request.params.id}:`, error);
+        return reply.code(500).send({ error: error.message });
+    }
+}
+
 /**
  * Handler for MANUAL result declaration. Uses an overrideList.
  * @route POST /biddings/declare-manual

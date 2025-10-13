@@ -400,8 +400,8 @@ export const getPrediction = async ({ gameId, date, type, openPanna, closePanna 
     }
 
     const dailyResult = {
-        openingPanna,
-        closingPanna,
+        openPanna,
+        closePanna,
         jodi: `${sumDigits(openPanna)}${sumDigits(closePanna)}`,
         isClosed: false,
     };

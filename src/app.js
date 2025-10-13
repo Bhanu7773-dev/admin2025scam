@@ -14,6 +14,7 @@ import { settingsRoutes, gameRatesRoutes } from "./routes/settings.routes.js";
 import biddingRoutes from "./routes/bidding.routes.js";
 import { sendNotificationHandler } from "./controllers/notification.controller.js";
 import { verifyFirebaseIdToken } from './plugins/firebaseAuth.js';
+import gamesRoutes from "./routes/games.routes.js";
 
 const app = Fastify({ logger: false });
 
@@ -50,6 +51,7 @@ app.register(adminRoutes, { prefix: "/admin" });
 app.register(usersRoutes, { prefix: "/users" });
 app.register(fundsRoutes, { prefix: "/funds" });
 app.register(biddingRoutes, { prefix: "/biddings" });
+app.register(gamesRoutes, { prefix: "/games"})
 
 // Settings Routes
 app.register(settingsRoutes, { prefix: "/settings" });
@@ -60,5 +62,12 @@ app.register(gameRatesRoutes, { prefix: "/game-rates" });
 // Protect notify route with Firebase token verification. If you want to allow anonymous broadcasts,
 // call the route without a token. Currently this will require a Bearer ID token from Firebase.
 app.post('/notify', { preHandler: verifyFirebaseIdToken }, sendNotificationHandler)
+
+// Lightweight auth-check endpoint used by frontend after Firebase sign-in.
+// It simply returns 200 if the token corresponds to a Firestore user with isAdmin/isSubAdmin.
+app.get('/auth/check', { preHandler: verifyFirebaseIdToken }, async (request, reply) => {
+  // request.user and request.userDoc are populated by middleware
+  return reply.send({ ok: true, uid: request.user.uid, user: request.userDoc });
+});
 
 export default app;

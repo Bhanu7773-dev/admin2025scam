@@ -124,6 +124,7 @@ export const getAllFunds = async () => {
         const date = d.createdAt?.toDate?.().toISOString().slice(0, 10) || null;
         return {
             index: i + 1,
+            uid: d.uid,
             username: info.username,
             mobile: info.mobile,
             amount: d.amount || 0,
@@ -138,6 +139,7 @@ export const getAllFunds = async () => {
         const date = d.createdAt?.toDate?.().toISOString().slice(0, 10) || null;
         return {
             index: i + 1,
+            uid: d.uid,
             username: info.username,
             mobile: info.mobile,
             amount: d.amount || 0,

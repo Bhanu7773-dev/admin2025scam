@@ -4,7 +4,8 @@ import {
     getBiddingByIdHandler,
     getPredictionHandler, // <-- Import the new handler
     declareManualResultHandler,
-    declareAutomaticResultHandler
+    declareAutomaticResultHandler,
+    updateBiddingHandler
 } from "../controllers/bidding.controller.js";
 import { declareResultHandler } from "../services/game.service.js";
 
@@ -33,6 +34,12 @@ export default async function biddingRoutes(fastify) {
      * @route GET /biddings/:id
      */
     fastify.get("/:id", getBiddingByIdHandler);
+
+     /**
+     * @description Update the details of a specific bid.
+     * @route PATCH /biddings/:id
+     */
+    fastify.patch("/:id", updateBiddingHandler);
 
     /**
      * @description Declare a result and process all related bids.
