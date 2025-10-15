@@ -270,13 +270,13 @@ export const updateUserStatus = async ({ uuid }) => {
     }
 
     // 1. Get the current user record from Firebase Auth
-    // const userRecord = await admin.auth().getUser(uuid);
+    const userRecord = await admin.auth().getUser(uuid);
 
     // 2. Determine the new disabled state by toggling the current state
-    // const newDisabledState = !userRecord.disabled;
+    const newDisabledState = !userRecord.disabled;
 
     // 3. Update the user's status in Firebase Authentication
-    // await admin.auth().updateUser(uuid, { disabled: newDisabledState });
+    await admin.auth().updateUser(uuid, { disabled: newDisabledState });
 
     // 4. Update the 'isDisabled' field in the user's Firestore document
     const userDocRef = db.collection('users').doc(uuid);
