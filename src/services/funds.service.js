@@ -284,8 +284,10 @@ export const updateFundRequestStatus = async ({ requestId, newStatus }) => {
 };
 
 /**
- * Updates the status of a withdrawal request to 'approved' or 'rejected'.
- * This version ONLY updates the status and does NOT modify any user funds.
+ * Updates the status of a withdrawal request.
+ * - If approved, only the status is changed.
+ * - If rejected, the status is changed AND the funds are atomically returned to the user's balance.
+ * - The function will not run if the request is already processed.
  * @param {object} params - The parameters for the function.
  * @param {string} params.requestId - The ID of the 'withdrawl' document to update.
  * @param {'approved' | 'rejected'} params.newStatus - The new status to set.
@@ -293,22 +295,13 @@ export const updateFundRequestStatus = async ({ requestId, newStatus }) => {
  */
 export const updateWithdrawalRequestStatus = async ({ requestId, newStatus }) => {
     if (!requestId) throw new Error("updateWithdrawalRequestStatus(): requestId is required.");
-    if (newStatus !== 'approved' && newStatus !== 'rejected') throw new Error("Invalid status. Must be 'approved' or 'rejected'.");
+    if (newStatus !== 'approved' && newStatus !== 'rejected' && newStatus !== 'declined') throw new Error("Invalid status. Must be 'approved' or 'rejected'.");
 
     const withdrawlRef = db.collection('withdrawl').doc(requestId);
-    
-    // Logic for rejecting a request remains simple.
-    if (newStatus === 'rejected') {
-        await withdrawlRef.update({ 
-            status: 'rejected',
-            processedAt: admin.firestore.FieldValue.serverTimestamp() 
-        });
-        return { success: true, message: 'Withdrawal request rejected successfully.' };
-    }
 
-    // Logic for approving a request.
     try {
-        // First, get the document to make sure it's in a 'pending' state.
+        // STEP 1: Read the document first to ensure it's in a 'pending' state.
+        // This makes the entire operation idempotent.
         const withdrawlDoc = await withdrawlRef.get();
         if (!withdrawlDoc.exists) throw new Error("Withdrawal request document not found.");
 
@@ -316,18 +309,69 @@ export const updateWithdrawalRequestStatus = async ({ requestId, newStatus }) =>
         if (withdrawlData.status !== 'pending') {
             throw new Error(`Request has already been processed with status: ${withdrawlData.status}.`);
         }
-        
-        // Simply update the status of the withdrawal request to 'approved'.
-        await withdrawlRef.update({ 
-            status: 'approved',
-            processedAt: admin.firestore.FieldValue.serverTimestamp()
-        });
 
-        return { success: true, message: 'Withdrawal request approved successfully.' };
+        // STEP 2: Handle the 'approved' case.
+        if (newStatus === 'approved') {
+            // On approval, we only update the status. No fund modification.
+            await withdrawlRef.update({
+                status: 'approved',
+                processedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+            return { success: true, message: 'Withdrawal request approved successfully.' };
+        }
+
+        // STEP 3: Handle the 'rejected' case, which requires a transaction to return funds.
+        if (newStatus === 'rejected' || newStatus === 'declined') {
+            const { uid, amount } = withdrawlData;
+            if (!uid || typeof amount !== 'number' || amount <= 0) {
+                throw new Error("Request is missing 'uid' or has an invalid 'amount'.");
+            }
+
+            // This is a critical operation, so we use a transaction.
+            await db.runTransaction(async (t) => {
+                const fundsQuery = db.collection('funds').where('uid', '==', uid).limit(1);
+                const fundsSnapshot = await t.get(fundsQuery);
+
+                if (fundsSnapshot.empty) {
+                    // This case is unlikely for a withdrawal but included for safety.
+                    throw new Error(`Cannot return funds: Funds document for user ${uid} not found.`);
+                }
+                
+                const fundsDocRef = fundsSnapshot.docs[0].ref;
+                const balanceBefore = fundsSnapshot.docs[0].data().balance || 0;
+                const balanceAfter = balanceBefore + amount;
+
+                // Create a transaction log for the credit reversal.
+                const logRef = db.collection('funds_transactions').doc();
+                t.set(logRef, {
+                    uid,
+                    amount,
+                    balanceBefore,
+                    balanceAfter,
+                    type: 'credit',
+                    reason: `Withdrawal Rejected - Funds Returned (Ref: ${requestId})`,
+                    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+                });
+
+                // Atomically add the funds back to the user's account.
+                t.update(fundsDocRef, {
+                    balance: admin.firestore.FieldValue.increment(amount),
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                });
+
+                // Update the original withdrawal request's status.
+                t.update(withdrawlRef, {
+                    status: 'rejected',
+                    processedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+            });
+
+            return { success: true, message: 'Request rejected and funds returned to user successfully.' };
+        }
 
     } catch (error) {
-        console.error("Withdrawal approval failed: ", error);
-        throw new Error(`Failed to approve withdrawal: ${error.message}`);
+        console.error("Withdrawal status update failed: ", error);
+        throw new Error(`Failed to update withdrawal request: ${error.message}`);
     }
 };
 
