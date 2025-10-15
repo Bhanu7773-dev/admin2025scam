@@ -15,6 +15,7 @@ import biddingRoutes from "./routes/bidding.routes.js";
 import { sendNotificationHandler } from "./controllers/notification.controller.js";
 import { verifyFirebaseIdToken } from './plugins/firebaseAuth.js';
 import gamesRoutes from "./routes/games.routes.js";
+import starlineGameController from "./routes/starline.games.routes.js";
 
 const app = Fastify({ logger: false });
 
@@ -52,6 +53,9 @@ app.register(usersRoutes, { prefix: "/users" });
 app.register(fundsRoutes, { prefix: "/funds" });
 app.register(biddingRoutes, { prefix: "/biddings" });
 app.register(gamesRoutes, { prefix: "/games"})
+
+// New Format 
+app.register(starlineGameController, { prefix: "/starline-games"})
 
 // Settings Routes
 app.register(settingsRoutes, { prefix: "/settings" });

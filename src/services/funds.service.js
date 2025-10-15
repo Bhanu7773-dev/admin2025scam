@@ -297,6 +297,7 @@ export const updateWithdrawalRequestStatus = async ({ requestId, newStatus }) =>
 
 /**
  * Atomically updates a user's balance and creates a transaction log.
+ * If the funds document does not exist, it will be created.
  * Can be used for both adding (credit) and subtracting (debit) funds.
  * @param {object} params The parameters for the transaction.
  * @param {string} params.uid The user's Authentication UID.
@@ -314,17 +315,35 @@ export const updateUserBalance = async ({ uid, amount, reason }) => {
     try {
         await db.runTransaction(async (t) => {
             const fundsSnapshot = await t.get(fundsQuery);
-            if (fundsSnapshot.empty) throw new Error(`Funds document for user ${uid} not found.`);
 
-            const fundsDocRef = fundsSnapshot.docs[0].ref;
-            const fundsData = fundsSnapshot.docs[0].data();
-            const balanceBefore = fundsData.balance || 0;
+            let fundsDocRef;
+            let balanceBefore = 0; // Default to 0 for a new document
+
+            if (fundsSnapshot.empty) {
+                // CASE 1: Document does NOT exist. Prepare to create it.
+                if (amount < 0) {
+                    // Prevent creating a new account with a negative balance.
+                    throw new Error("Cannot create a new funds account with a negative balance.");
+                }
+                
+                // Create a reference for the new document that will be created.
+                fundsDocRef = db.collection('funds').doc(); 
+                balanceBefore = 0;
+            } else {
+                // CASE 2: Document already exists. Get its reference and current balance.
+                fundsDocRef = fundsSnapshot.docs[0].ref;
+                const fundsData = fundsSnapshot.docs[0].data();
+                balanceBefore = fundsData.balance || 0;
+            }
+
             const balanceAfter = balanceBefore + amount;
 
+            // Check for insufficient funds, which applies to both creating and updating.
             if (balanceAfter < 0) {
                 throw new Error("Insufficient funds for this operation.");
             }
 
+            // Always create a transaction log for the operation.
             const logRef = db.collection('funds_transactions').doc();
             t.set(logRef, {
                 uid,
@@ -336,8 +355,26 @@ export const updateUserBalance = async ({ uid, amount, reason }) => {
                 timestamp: admin.firestore.FieldValue.serverTimestamp(),
             });
 
-            t.update(fundsDocRef, { balance: balanceAfter });
+            // Atomically create or update the funds document.
+            if (fundsSnapshot.empty) {
+                // If it was empty, create the new document with the full structure.
+                t.set(fundsDocRef, {
+                    uid,
+                    balance: balanceAfter,
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    lastSyncAt: admin.firestore.FieldValue.serverTimestamp(),
+                });
+            } else {
+                // If it existed, update the balance and timestamps.
+                t.update(fundsDocRef, { 
+                    balance: balanceAfter,
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    lastSyncAt: admin.firestore.FieldValue.serverTimestamp(),
+                });
+            }
         });
+
         return { success: true, message: `Balance updated successfully.` };
     } catch (error) {
         console.error("Update balance transaction failed:", error);
