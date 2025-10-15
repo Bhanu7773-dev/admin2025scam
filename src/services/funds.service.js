@@ -42,7 +42,7 @@ const _fetchUserInfoByUids = async (uids) => {
                 // Create the map entry directly from Firestore data.
                 userInfoMap.set(uid, {
                     username: data.username || "User",
-                    mobile: data.phone || "N/A", 
+                    mobile: data.phone || "N/A",
                 });
             }
         } catch (error) {
@@ -481,7 +481,7 @@ export const getDepositRequestsForUser = async ({ uuid }) => {
 
     const deposits = snapshot.docs.map(doc => {
         const data = doc.data();
-        return data
+        return { id: doc.id, ...data }
     });
 
     return deposits;
