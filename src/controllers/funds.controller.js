@@ -8,7 +8,7 @@ import {
 
 /**
  * Handler to get all fund requests and withdrawals, aggregated.
- * This is the main endpoint for the /fund-requests route.
+ * This is the main endpoint for the /funds route.
  */
 export async function getAllFundsHandler(req, rep) {
     try {

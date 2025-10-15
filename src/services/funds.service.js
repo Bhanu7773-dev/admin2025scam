@@ -196,41 +196,86 @@ export const updateFundRequestStatus = async ({ requestId, newStatus }) => {
     if (newStatus !== 'approved' && newStatus !== 'rejected') throw new Error("Invalid status. Must be 'approved' or 'rejected'.");
 
     const depositRef = db.collection('deposits').doc(requestId);
+
+    // Rejection logic is simple and doesn't need a transaction.
     if (newStatus === 'rejected') {
-        await depositRef.update({ status: 'rejected' });
+        await depositRef.update({ 
+            status: 'rejected',
+            processedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
         return { success: true, message: 'Request rejected successfully.' };
     }
 
+    // Approval logic requires a transaction.
     try {
         await db.runTransaction(async (t) => {
             const depositDoc = await t.get(depositRef);
             if (!depositDoc.exists) throw new Error("Deposit request document not found.");
             
             const depositData = depositDoc.data();
-            if (depositData.status !== 'pending') throw new Error(`Request has already been ${depositData.status}.`);
+            // This check is crucial to prevent processing a request twice.
+            if (depositData.status !== 'pending') throw new Error(`Request has already been processed with status: ${depositData.status}.`);
 
             const { uid, amount } = depositData;
-            if (!uid || typeof amount !== 'number') throw new Error("Request is missing 'uid' or 'amount'.");
+            if (!uid || typeof amount !== 'number' || amount <= 0) {
+                throw new Error("Request is missing 'uid' or has an invalid 'amount'.");
+            }
 
+            // Find the user's funds document.
             const fundsQuery = db.collection('funds').where('uid', '==', uid).limit(1);
             const fundsSnapshot = await t.get(fundsQuery);
-            if (fundsSnapshot.empty) throw new Error(`Funds document for user ${uid} not found.`);
 
-            const fundsDocRef = fundsSnapshot.docs[0].ref;
-            const fundsData = fundsSnapshot.docs[0].data();
-            const balanceBefore = fundsData.balance || 0;
+            let fundsDocRef;
+            let balanceBefore = 0;
+
+            // ✨ IMPROVEMENT: Handle new users correctly.
+            if (fundsSnapshot.empty) {
+                // If the user has no funds doc, create a reference for a new one.
+                fundsDocRef = db.collection('funds').doc();
+            } else {
+                // If it exists, get the reference and current balance.
+                fundsDocRef = fundsSnapshot.docs[0].ref;
+                balanceBefore = fundsSnapshot.docs[0].data().balance || 0;
+            }
+
             const balanceAfter = balanceBefore + amount;
 
+            // Create the transaction log.
             const logRef = db.collection('funds_transactions').doc();
             t.set(logRef, {
-                uid, amount, balanceBefore, balanceAfter, type: 'credit',
+                uid,
+                amount,
+                balanceBefore,
+                balanceAfter,
+                type: 'credit',
                 reason: `Deposit Approved - Ref: ${requestId}`,
                 timestamp: admin.firestore.FieldValue.serverTimestamp(),
             });
 
-            t.update(fundsDocRef, { balance: balanceAfter });
-            t.update(depositRef, { status: 'approved' });
+            // ✨ IMPROVEMENT: Create or update the funds document.
+            if (fundsSnapshot.empty) {
+                // If creating a new funds doc, use t.set().
+                t.set(fundsDocRef, {
+                    uid,
+                    balance: balanceAfter,
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                });
+            } else {
+                // ✅ FIX: Use the safer atomic increment operator for existing docs.
+                t.update(fundsDocRef, {
+                    balance: admin.firestore.FieldValue.increment(amount),
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                });
+            }
+
+            // Finally, update the original deposit request's status.
+            t.update(depositRef, { 
+                status: 'approved',
+                processedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
         });
+
         return { success: true, message: 'Request approved and funds added successfully.' };
     } catch (error) {
         console.error("Fund request approval transaction failed: ", error);
@@ -240,7 +285,7 @@ export const updateFundRequestStatus = async ({ requestId, newStatus }) => {
 
 /**
  * Updates the status of a withdrawal request to 'approved' or 'rejected'.
- * On approval, it debits the user's account within a transaction.
+ * This version ONLY updates the status and does NOT modify any user funds.
  * @param {object} params - The parameters for the function.
  * @param {string} params.requestId - The ID of the 'withdrawl' document to update.
  * @param {'approved' | 'rejected'} params.newStatus - The new status to set.
@@ -251,59 +296,44 @@ export const updateWithdrawalRequestStatus = async ({ requestId, newStatus }) =>
     if (newStatus !== 'approved' && newStatus !== 'rejected') throw new Error("Invalid status. Must be 'approved' or 'rejected'.");
 
     const withdrawlRef = db.collection('withdrawl').doc(requestId);
+    
+    // Logic for rejecting a request remains simple.
     if (newStatus === 'rejected') {
-        await withdrawlRef.update({ status: 'rejected' });
+        await withdrawlRef.update({ 
+            status: 'rejected',
+            processedAt: admin.firestore.FieldValue.serverTimestamp() 
+        });
         return { success: true, message: 'Withdrawal request rejected successfully.' };
     }
 
+    // Logic for approving a request.
     try {
-        await db.runTransaction(async (t) => {
-            const withdrawlDoc = await t.get(withdrawlRef);
-            if (!withdrawlDoc.exists) throw new Error("Withdrawal request document not found.");
+        // First, get the document to make sure it's in a 'pending' state.
+        const withdrawlDoc = await withdrawlRef.get();
+        if (!withdrawlDoc.exists) throw new Error("Withdrawal request document not found.");
 
-            const withdrawlData = withdrawlDoc.data();
-            if (withdrawlData.status !== 'pending') throw new Error(`Request has already been ${withdrawlData.status}.`);
-            
-            const { uid, amount } = withdrawlData;
-            if (!uid || typeof amount !== 'number') throw new Error("Request is missing 'uid' or a valid 'amount'.");
-
-            const fundsQuery = db.collection('funds').where('uid', '==', uid).limit(1);
-            const fundsSnapshot = await t.get(fundsQuery);
-            if (fundsSnapshot.empty) throw new Error(`Funds document for user ${uid} not found.`);
-
-            const fundsDocRef = fundsSnapshot.docs[0].ref;
-            const fundsData = fundsSnapshot.docs[0].data();
-            const balanceBefore = fundsData.balance || 0;
-
-            if (balanceBefore < amount) throw new Error("Insufficient funds to approve withdrawal.");
-            
-            const balanceAfter = balanceBefore - amount;
-            const logRef = db.collection('funds_transactions').doc();
-            t.set(logRef, {
-                uid, amount, balanceBefore, balanceAfter, type: 'debit',
-                reason: `Withdrawal Approved - Ref: ${requestId}`,
-                timestamp: admin.firestore.FieldValue.serverTimestamp(),
-            });
-
-            t.update(fundsDocRef, { balance: balanceAfter });
-            t.update(withdrawlRef, { status: 'approved' });
+        const withdrawlData = withdrawlDoc.data();
+        if (withdrawlData.status !== 'pending') {
+            throw new Error(`Request has already been processed with status: ${withdrawlData.status}.`);
+        }
+        
+        // Simply update the status of the withdrawal request to 'approved'.
+        await withdrawlRef.update({ 
+            status: 'approved',
+            processedAt: admin.firestore.FieldValue.serverTimestamp()
         });
-        return { success: true, message: 'Withdrawal approved and funds debited successfully.' };
+
+        return { success: true, message: 'Withdrawal request approved successfully.' };
+
     } catch (error) {
-        console.error("Withdrawal approval transaction failed: ", error);
+        console.error("Withdrawal approval failed: ", error);
         throw new Error(`Failed to approve withdrawal: ${error.message}`);
     }
 };
 
 /**
- * Atomically updates a user's balance and creates a transaction log.
- * If the funds document does not exist, it will be created.
- * Can be used for both adding (credit) and subtracting (debit) funds.
- * @param {object} params The parameters for the transaction.
- * @param {string} params.uid The user's Authentication UID.
- * @param {number} params.amount The amount to add (positive) or subtract (negative).
- * @param {string} params.reason A description of why the balance is being changed (e.g., "Admin Credit").
- * @returns {Promise<{success: boolean, message: string}>} The result of the operation.
+ * Atomically updates a user's balance and creates a transaction log using FieldValue.increment().
+ * This is the recommended and safer way to handle atomic counter updates.
  */
 export const updateUserBalance = async ({ uid, amount, reason }) => {
     if (!uid) throw new Error("updateUserBalance(): uid is required.");
@@ -320,30 +350,25 @@ export const updateUserBalance = async ({ uid, amount, reason }) => {
             let balanceBefore = 0; // Default to 0 for a new document
 
             if (fundsSnapshot.empty) {
-                // CASE 1: Document does NOT exist. Prepare to create it.
+                // If the user's fund document doesn't exist, we'll create it.
                 if (amount < 0) {
-                    // Prevent creating a new account with a negative balance.
                     throw new Error("Cannot create a new funds account with a negative balance.");
                 }
-                
-                // Create a reference for the new document that will be created.
-                fundsDocRef = db.collection('funds').doc(); 
-                balanceBefore = 0;
+                fundsDocRef = db.collection('funds').doc(); // Ref for the new doc
             } else {
-                // CASE 2: Document already exists. Get its reference and current balance.
+                // If the document exists, get its reference and current balance.
                 fundsDocRef = fundsSnapshot.docs[0].ref;
-                const fundsData = fundsSnapshot.docs[0].data();
-                balanceBefore = fundsData.balance || 0;
+                balanceBefore = fundsSnapshot.docs[0].data().balance || 0;
             }
 
             const balanceAfter = balanceBefore + amount;
 
-            // Check for insufficient funds, which applies to both creating and updating.
+            // Still perform the check for insufficient funds before committing.
             if (balanceAfter < 0) {
-                throw new Error("Insufficient funds for this operation.");
+                throw new Error(`Insufficient funds. Current balance is ${balanceBefore}, tried to debit ${Math.abs(amount)}.`);
             }
 
-            // Always create a transaction log for the operation.
+            // Create the transaction log (this logic remains the same)
             const logRef = db.collection('funds_transactions').doc();
             t.set(logRef, {
                 uid,
@@ -357,20 +382,18 @@ export const updateUserBalance = async ({ uid, amount, reason }) => {
 
             // Atomically create or update the funds document.
             if (fundsSnapshot.empty) {
-                // If it was empty, create the new document with the full structure.
+                // If creating, set the initial document structure.
                 t.set(fundsDocRef, {
                     uid,
-                    balance: balanceAfter,
+                    balance: balanceAfter, // Set the initial balance directly
                     createdAt: admin.firestore.FieldValue.serverTimestamp(),
                     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                    lastSyncAt: admin.firestore.FieldValue.serverTimestamp(),
                 });
             } else {
-                // If it existed, update the balance and timestamps.
-                t.update(fundsDocRef, { 
-                    balance: balanceAfter,
+                // If updating, use the atomic increment operator.
+                t.update(fundsDocRef, {
+                    balance: admin.firestore.FieldValue.increment(amount), // ✅ THE FIX
                     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                    lastSyncAt: admin.firestore.FieldValue.serverTimestamp(),
                 });
             }
         });
