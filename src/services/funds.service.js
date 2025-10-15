@@ -32,7 +32,7 @@ const _fetchUserInfoByUids = async (uids) => {
                 if (!uid) continue;
 
                 userInfoMap.set(uid, {
-                    username: data.name || "User",
+                    username: data.username || "User",
                     mobile: data.phone || "N/A",
                 });
             }
@@ -137,6 +137,8 @@ export const getAllFunds = async () => {
             mobile: info.mobile,
             amount: d.amount || 0,
             requestNo: d.withdrawalId || d.id,
+            upiApp: d.upiDetails.upiApp,
+            upiNumber: d.upiDetails.upiNumber,
             date,
             status: d.status || "pending",
         };
