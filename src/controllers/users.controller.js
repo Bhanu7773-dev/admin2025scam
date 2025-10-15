@@ -8,7 +8,7 @@ import {
     createAdmin,
     updateUserPassword
 } from "../services/users.service.js";
-import { getFundsOfUser, getFundTransactionsForUser } from "../services/funds.service.js";
+import { getDepositRequestsForUser, getFundsOfUser, getFundTransactionsForUser } from "../services/funds.service.js";
 import { getWithdrawlRequestsForUser } from "../services/withdrawl.service.js";
 import { getBiddingOfUser } from "../services/bidding.service.js";
 
@@ -230,6 +230,23 @@ export async function getUserBiddingsHandler(req, reply) {
         reply.send({ data: biddings });
     } catch (err) {
         console.error("Error in getUserBiddingsHandler:", err);
+        reply.status(500).send({ error: err instanceof Error ? err.message : "Unknown error" });
+    }
+}
+
+/**
+ * Handler to get a user's deposits history.
+ * @route GET /users/:uid/biddings
+ */
+export async function getUserDepositsHandler(req, reply) {
+    try {
+        const { uid } = req.params;
+        if (!uid) return reply.status(400).send({ error: "User ID (uid) is required" });
+
+        const deposits = await getDepositRequestsForUser({ uuid: uid });
+        reply.send({ data: deposits });
+    } catch (err) {
+        console.error("Error in getUserDepositsHandler:", err);
         reply.status(500).send({ error: err instanceof Error ? err.message : "Unknown error" });
     }
 }

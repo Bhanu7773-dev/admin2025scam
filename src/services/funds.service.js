@@ -1,5 +1,7 @@
 import { db, admin } from "../plugins/firebase.js";
 
+const DEPOSITS_COLLECTION = "deposits"
+
 /**
  * Helper to batch an array into smaller chunks for Firestore 'in' queries.
  * @param {Array<any>} arr The array to chunk.
@@ -455,4 +457,32 @@ export const updateUserBalance = async ({ uid, amount, reason }) => {
         console.error("Update balance transaction failed:", error);
         throw new Error(`Failed to update balance: ${error.message}`);
     }
+};
+
+/**
+ * Gets all withdrawal requests for a specific user, ordered by most recent.
+ * @param {object} params - The parameters for the function.
+ * @param {string} params.uuid - The user's UID to fetch withdrawal requests for.
+ * @returns {Promise<Array<object>>} A promise that resolves to an array of withdrawal request objects.
+ */
+export const getDepositRequestsForUser = async ({ uuid }) => {
+    if (!uuid) {
+        throw new Error("getDepositRequestsForUser(): uuid is required");
+    }
+
+    const q = db.collection(DEPOSITS_COLLECTION)
+        .where("uid", "==", uuid)
+        .orderBy("createdAt", "desc"); // Use createdAt for consistent ordering
+
+    const snapshot = await q.get();
+    if (snapshot.empty) {
+        return [];
+    }
+
+    const deposits = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return data
+    });
+
+    return deposits;
 };

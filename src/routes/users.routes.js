@@ -10,7 +10,8 @@ import {
     getUserFundTransactionsHandler,
     getUserWithdrawlsHandler,
     getUserBiddingsHandler,
-    updateUserPasswordHandler
+    updateUserPasswordHandler,
+    getUserDepositsHandler
 } from "../controllers/users.controller.js";
 import { admin, db } from "../plugins/firebase.js";
 
@@ -46,6 +47,7 @@ export default async function usersRoutes(fastify) {
     fastify.get("/:uid/transactions", getUserFundTransactionsHandler);
     fastify.get("/:uid/withdrawals", getUserWithdrawlsHandler);
     fastify.get("/:uid/biddings", getUserBiddingsHandler);
+    fastify.get("/:uid/deposits", getUserDepositsHandler );
 
     fastify.get("/existing-user/:phone", async (req, rep) => {
         try {
