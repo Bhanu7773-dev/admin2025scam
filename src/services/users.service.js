@@ -194,7 +194,7 @@ export const getAllUsers = async ({ includeSubAdmins = false, limit = 20, startA
                 id: u.id,
                 uid: u.uid,
                 idDisabled: u.isDisabled == true,
-                username: auth.username || "User",
+                username: u.username || "User",
                 name: u.name || auth.username || "User",
                 mobile: auth.mobile || "N/A",
                 email: auth.email || "",
@@ -339,9 +339,9 @@ export const updateUserPassword = async ({ uid, password }) => {
 
     return { success: true, message: "User password updated successfully." };
 };
-
 /**
  * Deletes a user from Firebase Auth and all associated Firestore documents.
+ * This includes their main profile, funds document, and all their bidding history.
  * @param {object} params - The parameters for the function.
  * @param {string} params.uid - The UID of the user to delete.
  * @returns {Promise<{success: boolean, message: string}>} A promise resolving on completion.
@@ -349,19 +349,36 @@ export const updateUserPassword = async ({ uid, password }) => {
 export const deleteUser = async ({ uid }) => {
     if (!uid) throw new Error("deleteUser(): uid is required.");
 
+    // Step 1: Delete the user from Firebase Authentication.
+    // If this fails, the function will stop before touching Firestore.
     await admin.auth().deleteUser(uid);
 
     const batch = db.batch();
+    
+    // Step 2: Schedule the main user document for deletion.
+    // This assumes the document ID in 'users' is the same as the Auth UID.
     const userDocRef = db.collection(USERS_COLLECTION).doc(uid);
     batch.delete(userDocRef);
 
+    // Step 3: Find and schedule the user's funds document for deletion.
     const fundsQuery = db.collection(FUNDS_COLLECTION).where("uid", "==", uid).limit(1);
     const fundsSnapshot = await fundsQuery.get();
     if (!fundsSnapshot.empty) {
         batch.delete(fundsSnapshot.docs[0].ref);
     }
 
+    // Step 4: Find and schedule all of the user's bidding documents for deletion.
+    const bidsQuery = db.collection(GAME_SUBMISSIONS_COLLECTION).where("uid", "==", uid);
+    const bidsSnapshot = await bidsQuery.get();
+    if (!bidsSnapshot.empty) {
+        // Loop through all found bidding documents and add them to the batch.
+        for (const doc of bidsSnapshot.docs) {
+            batch.delete(doc.ref);
+        }
+    }
+
+    // Step 5: Commit all scheduled deletions in one atomic operation.
     await batch.commit();
 
-    return { success: true, message: `User ${uid} deleted successfully.` };
+    return { success: true, message: `User ${uid} and all associated data deleted successfully.` };
 };

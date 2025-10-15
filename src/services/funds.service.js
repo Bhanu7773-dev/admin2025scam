@@ -7,42 +7,48 @@ import { db, admin } from "../plugins/firebase.js";
  * @returns {Array<Array<any>>} An array of chunked arrays.
  */
 const _chunkArray = (arr, size) => {
-  const chunks = [];
-  for (let i = 0; i < arr.length; i += size) {
-    chunks.push(arr.slice(i, i + size));
-  }
-  return chunks;
+    const chunks = [];
+    for (let i = 0; i < arr.length; i += size) {
+        chunks.push(arr.slice(i, i + size));
+    }
+    return chunks;
 };
 
 /**
- * A private helper to fetch Firebase Auth records for a given list of UIDs.
+ * A private helper to fetch user info directly from the 'users' Firestore collection.
  * This is optimized to handle large lists by batching requests.
  * @param {string[]} uids - An array of user UIDs.
- * @returns {Promise<Map<string, object>>} A Map where keys are UIDs and values are user auth data.
+ * @returns {Promise<Map<string, object>>} A Map where keys are UIDs and values are { username, mobile }.
  */
-const _fetchAuthInfoByUids = async (uids) => {
-    const authMap = new Map();
+const _fetchUserInfoByUids = async (uids) => {
+    const userInfoMap = new Map();
     if (!uids || uids.length === 0) {
-        return authMap;
+        return userInfoMap;
     }
-    const uidChunks = _chunkArray(uids, 100); // Firebase Auth `getUsers` limit is 100
-    for (const chunk of uidChunks) {
+
+    // Firestore 'in' query limit is 30, so we batch the UIDs.
+    const firestoreChunks = _chunkArray(uids, 30);
+    for (const chunk of firestoreChunks) {
         try {
-            const userRecords = await admin.auth().getUsers(chunk.map(uid => ({ uid })));
-            for (const userRecord of userRecords.users) {
-                const email = userRecord.email || "";
-                const phone = email.includes("@") ? email.split("@")[0] : (userRecord.phoneNumber || "N/A");
-                authMap.set(userRecord.uid, {
-                    username: userRecord.displayName || "User",
-                    email,
-                    mobile: phone,
+            // Query the 'users' collection where the 'uid' field is in our list of UIDs.
+            const usersSnapshot = await db.collection("users").where("uid", "in", chunk).get();
+            for (const doc of usersSnapshot.docs) {
+                const data = doc.data();
+                const uid = data.uid;
+                if (!uid) continue; // Skip if a document somehow doesn't have a UID.
+
+                // Create the map entry directly from Firestore data.
+                userInfoMap.set(uid, {
+                    username: data.username || "User",
+                    mobile: data.phone || "N/A", 
                 });
             }
         } catch (error) {
-            console.error("Error fetching a batch of user auth records:", error);
+            console.error("Error fetching a batch of user firestore records:", error);
         }
     }
-    return authMap;
+
+    return userInfoMap;
 };
 
 /**
@@ -115,9 +121,10 @@ export const getAllFunds = async () => {
 
     const depositDocs = depositsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     const withdrawDocs = withdrawSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    
+
     const allUids = [...new Set([...depositDocs.map(d => d.uid), ...withdrawDocs.map(d => d.uid)].filter(Boolean))];
-    const userInfoMap = await _fetchAuthInfoByUids(allUids);
+
+    const userInfoMap = await _fetchUserInfoByUids(allUids);
 
     const fundRequests = depositDocs.map((d, i) => {
         const info = userInfoMap.get(d.uid) || { username: "User", mobile: "" };
@@ -140,8 +147,8 @@ export const getAllFunds = async () => {
         return {
             index: i + 1,
             uid: d.uid,
-            username: info.username,
-            mobile: info.mobile,
+            username: info.username, // This will now be the correct name
+            mobile: info.mobile,     // This will now be the correct mobile number
             amount: d.amount || 0,
             requestNo: d.withdrawalId || d.id,
             date,
@@ -153,6 +160,7 @@ export const getAllFunds = async () => {
     const totalFundWithdrawalAmount = fundWithdrawals.reduce((sum, r) => sum + r.amount, 0);
 
     return {
+        test: userInfoMap,
         fund_requests: { total_amount: totalFundRequestAmount, list: fundRequests },
         fund_withdrawals: { total_amount: totalFundWithdrawalAmount, list: fundWithdrawals },
     };
@@ -199,7 +207,7 @@ export const updateFundRequestStatus = async ({ requestId, newStatus }) => {
 
     // Rejection logic is simple and doesn't need a transaction.
     if (newStatus === 'rejected') {
-        await depositRef.update({ 
+        await depositRef.update({
             status: 'rejected',
             processedAt: admin.firestore.FieldValue.serverTimestamp()
         });
@@ -211,7 +219,7 @@ export const updateFundRequestStatus = async ({ requestId, newStatus }) => {
         await db.runTransaction(async (t) => {
             const depositDoc = await t.get(depositRef);
             if (!depositDoc.exists) throw new Error("Deposit request document not found.");
-            
+
             const depositData = depositDoc.data();
             // This check is crucial to prevent processing a request twice.
             if (depositData.status !== 'pending') throw new Error(`Request has already been processed with status: ${depositData.status}.`);
@@ -270,7 +278,7 @@ export const updateFundRequestStatus = async ({ requestId, newStatus }) => {
             }
 
             // Finally, update the original deposit request's status.
-            t.update(depositRef, { 
+            t.update(depositRef, {
                 status: 'approved',
                 processedAt: admin.firestore.FieldValue.serverTimestamp()
             });
@@ -336,7 +344,7 @@ export const updateWithdrawalRequestStatus = async ({ requestId, newStatus }) =>
                     // This case is unlikely for a withdrawal but included for safety.
                     throw new Error(`Cannot return funds: Funds document for user ${uid} not found.`);
                 }
-                
+
                 const fundsDocRef = fundsSnapshot.docs[0].ref;
                 const balanceBefore = fundsSnapshot.docs[0].data().balance || 0;
                 const balanceAfter = balanceBefore + amount;
