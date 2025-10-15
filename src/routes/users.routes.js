@@ -11,7 +11,7 @@ import {
     getUserWithdrawlsHandler,
     getUserBiddingsHandler
 } from "../controllers/users.controller.js";
-import { db } from "../plugins/firebase.js";
+import { admin, db } from "../plugins/firebase.js";
 
 export default async function usersRoutes(fastify) {
     // CREATE a new user
@@ -71,27 +71,24 @@ export default async function usersRoutes(fastify) {
 export async function checkEmailExists({ email }) {
     // Step 1: Check Firebase Authentication
     try {
-        await auth.getUserByEmail(email);
+        // 2. Use admin.auth() here
+        await admin.auth().getUserByEmail(email);
         // If the above line does not throw an error, the user exists in Auth.
         return { exists: true, in: 'auth' };
     } catch (error) {
         // 'auth/user-not-found' is the expected error if the email is not in Auth.
-        // We can ignore it and proceed to check Firestore.
-        // If it's a different error, we might want to log it but still proceed.
         if (error.code !== 'auth/user-not-found') {
             console.warn(`Auth check for ${email} failed with unexpected error:`, error.code);
         }
     }
 
-    // Step 2: Check Firestore 'users' collection
+    // Step 2: Check Firestore 'users' collection (This part was already correct)
     const usersRef = db.collection('users');
     const snapshot = await usersRef.where('email', '==', email).limit(1).get();
 
     if (!snapshot.empty) {
-        // A document with this email exists in the users collection.
         return { exists: true, in: 'firestore' };
     }
 
-    // If neither check found the email, it does not exist.
     return { exists: false };
 }
