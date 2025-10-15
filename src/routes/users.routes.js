@@ -9,7 +9,8 @@ import {
     getUserFundsHandler,
     getUserFundTransactionsHandler,
     getUserWithdrawlsHandler,
-    getUserBiddingsHandler
+    getUserBiddingsHandler,
+    updateUserPasswordHandler
 } from "../controllers/users.controller.js";
 import { admin, db } from "../plugins/firebase.js";
 
@@ -33,6 +34,9 @@ export default async function usersRoutes(fastify) {
 
     // UPDATE a user's balance
     fastify.post("/:uid/balance", updateUserBalanceHandler);
+
+    // UPDATE a user's password
+    fastify.patch("/:uid/password", updateUserPasswordHandler)
 
     // DELETE a user
     fastify.delete("/:uid", deleteUserHandler);
