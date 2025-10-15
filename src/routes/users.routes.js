@@ -11,6 +11,7 @@ import {
     getUserWithdrawlsHandler,
     getUserBiddingsHandler
 } from "../controllers/users.controller.js";
+import { db } from "../plugins/firebase.js";
 
 export default async function usersRoutes(fastify) {
     // CREATE a new user
