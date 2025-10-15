@@ -16,7 +16,7 @@ export const addGame = async ({ gameName, gameNameHindi, openTime, status }) => 
         const docRef = await STARLINE_GAMES.add({
             games_name: gameName,
             games_name_hindi: gameNameHindi,
-            closeTime: openTime,
+            close_time: openTime,
             game_status: status,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
@@ -34,7 +34,7 @@ export const addGame = async ({ gameName, gameNameHindi, openTime, status }) => 
  */
 export const getGames = async () => {
     try {
-        const snapshot = await STARLINE_GAMES.orderBy("closeTime", "asc").get();
+        const snapshot = await STARLINE_GAMES.orderBy("close_time", "asc").get();
         if (snapshot.empty) {
             console.log("No games found.");
             return [];
