@@ -15,10 +15,12 @@ export const getSettings = async () => {
         'min_withdrawal',
         'support',
         'upi',
-        'website'
+        'website',
+        'market_time',
+        'marquee'
     ];
     const mainDocRefs = settingDocs.map(docId => db.collection(SETTINGS_COLLECTION).doc(docId));
-    
+
     // 2. Define the separate share link document reference
     const shareDocRef = db.collection("sharelink").doc("main");
 
@@ -91,7 +93,7 @@ export const updateSettings = async (newSettings) => {
         lastUpdated: serverTimestamp
     };
     batch.set(supportRef, supportData, { merge: true });
-    
+
     // 4. UPI QR Code Setting
     const upiRef = db.collection(SETTINGS_COLLECTION).doc('upi');
     const upiData = {
@@ -112,9 +114,17 @@ export const updateSettings = async (newSettings) => {
     const shareRef = db.collection("sharelink").doc("main")
     const shareData = {
         url: newSettings.shareLink,
-        updatedAt: serverTimestamp 
+        updatedAt: serverTimestamp
     }
     batch.set(shareRef, shareData, { merge: true });
+
+    // 7. Market Time Settings
+    const marketTimeRef = db.collection(SETTINGS_COLLECTION).doc("market_time");
+    const marketTimeData = {
+        createdAt: serverTimestamp,
+        text: newSettings.text
+    }
+    batch.set(marketTimeRef, marketTimeData, { merge: true})
 
     try {
         await batch.commit();
