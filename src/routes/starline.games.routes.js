@@ -4,10 +4,10 @@ import { declareStarlineResultHandler, getStarlineResultsHandler } from "../cont
 
 const gameBodySchema = {
     type: 'object',
-    required: ['games_name', 'close_time', 'game_status'],
+    required: ['game_name', 'close_time', 'game_status'],
     properties: {
-        games_name: { type: 'string' },
-        games_name_hindi: { type: 'string' },
+        game_name: { type: 'string' },
+        game_name_hindi: { type: 'string' },
         close_time: { type: 'string', pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$' }, // HH:mm format
         game_status: { type: 'string', enum: ['0', '1'] },
     },
