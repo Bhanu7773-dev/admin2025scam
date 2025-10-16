@@ -11,11 +11,11 @@ const FUNDS_TRANSACTIONS_COLLECTION = "funds_transactions";
  * @returns {Array<Array<any>>} An array of chunked arrays.
  */
 const _chunkArray = (arr, size) => {
-  const chunks = [];
-  for (let i = 0; i < arr.length; i += size) {
-    chunks.push(arr.slice(i, i + size));
-  }
-  return chunks;
+    const chunks = [];
+    for (let i = 0; i < arr.length; i += size) {
+        chunks.push(arr.slice(i, i + size));
+    }
+    return chunks;
 };
 
 /**
@@ -25,27 +25,30 @@ const _chunkArray = (arr, size) => {
  * @returns {Promise<Map<string, object>>} A Map where keys are UIDs and values are user auth data.
  */
 const _fetchAuthInfoByUids = async (uids) => {
-    const authMap = new Map();
+    const userInfoMap = new Map();
     if (!uids || uids.length === 0) {
-        return authMap;
+        return userInfoMap;
     }
-    const uidChunks = _chunkArray(uids, 100); // Firebase Auth `getUsers` limit is 100
-    for (const chunk of uidChunks) {
+
+    const firestoreChunks = _chunkArray(uids, 30);
+    for (const chunk of firestoreChunks) {
         try {
-            const userRecords = await admin.auth().getUsers(chunk.map(uid => ({ uid })));
-            for (const userRecord of userRecords.users) {
-                const email = userRecord.email || "";
-                const phone = email.includes("@") ? email.split("@")[0] : (userRecord.phoneNumber || "N/A");
-                authMap.set(userRecord.uid, {
-                    username: userRecord.displayName || "User",
-                    mobile: phone,
+            const usersSnapshot = await db.collection("users").where("uid", "in", chunk).get();
+            for (const doc of usersSnapshot.docs) {
+                const data = doc.data();
+                const uid = data.uid;
+                if (!uid) continue;
+
+                userInfoMap.set(uid, {
+                    username: data.username || "User",
+                    mobile: data.phone || "N/A",
                 });
             }
         } catch (error) {
-            console.error("Error fetching a batch of user auth records:", error);
+            console.error("Error fetching a batch of user firestore records:", error);
         }
     }
-    return authMap;
+    return userInfoMap;
 };
 
 /**
@@ -104,7 +107,7 @@ export const getBiddingOfUser = async ({ uuid }) => {
     const q = db.collection(GAME_SUBMISSIONS_COLLECTION)
         .where("uid", "==", uuid)
         .orderBy("createdAt", "desc");
-    
+
     const snapshot = await q.get();
 
     if (snapshot.empty) {
@@ -145,14 +148,14 @@ export const updateBidding = async ({ bidId, data }) => {
     if (!data || Object.keys(data).length === 0) throw new Error("updateBidding(): data object with fields to update is required.");
 
     const bidRef = db.collection(GAME_SUBMISSIONS_COLLECTION).doc(bidId);
-    
+
     delete data.uid;
     delete data.createdAt;
-    
+
     data.updatedAt = admin.firestore.FieldValue.serverTimestamp();
 
     await bidRef.update(data);
-    
+
     return { success: true, message: `Bid ${bidId} updated successfully.` };
 };
 
@@ -230,7 +233,7 @@ export const revertBids = async ({ date }) => {
     const snapshot = await bidsQuery.get();
 
     if (snapshot.empty) return { success: true, message: "No bids found for the specified date to revert." };
-    
+
     const userRevertMap = new Map();
     snapshot.docs.forEach(doc => {
         const bid = { id: doc.id, ...doc.data() };
@@ -243,7 +246,7 @@ export const revertBids = async ({ date }) => {
     });
 
     if (userRevertMap.size === 0) return { success: true, message: "All bids for the date were already reverted or had no amount." };
-    
+
     const uids = Array.from(userRevertMap.keys());
     const fundsQuery = db.collection(FUNDS_COLLECTION).where('uid', 'in', uids);
     const fundsSnapshot = await fundsQuery.get();
@@ -285,5 +288,182 @@ export const revertBids = async ({ date }) => {
     } catch (error) {
         console.error("Error committing bid revert batch:", error);
         throw new Error("Failed to revert bids due to a database error.");
+    }
+};
+
+/**
+ * Reverts bids based on dynamic criteria (date and/or gameId), refunding the bid amounts.
+ * After reverting, it returns a detailed list of the bids that were processed.
+ * @param {object} params - The criteria for reverting bids.
+ * @param {string} [params.date] - The date to revert bids for, in 'YYYY-MM-DD' format.
+ * @param {string} [params.gameId] - The specific gameId to revert bids for.
+ * @returns {Promise<{success: boolean, message: string, revertedBids: Array<{username: string, bidAmount: number, gameType: string}>}>}
+ */
+export const revertBidsByCriteria = async ({ date, gameId }) => {
+    if (!date && !gameId) {
+        throw new Error("revertBidsByCriteria(): At least one criterion (date or gameId) is required.");
+    }
+
+    // Step 1: Build the query dynamically based on the provided criteria.
+    let bidsQuery = db.collection(GAME_SUBMISSIONS_COLLECTION);
+
+    if (date) {
+        const startDate = new Date(`${date}T00:00:00.000Z`);
+        const endDate = new Date(`${date}T23:59:59.999Z`);
+        bidsQuery = bidsQuery.where("createdAt", ">=", startDate).where("createdAt", "<=", endDate);
+    }
+    if (gameId) {
+        bidsQuery = bidsQuery.where("gameId", "==", gameId);
+    }
+    // NOTE: If using both 'date' and 'gameId', you may need to create a composite index in Firestore.
+
+    const snapshot = await bidsQuery.get();
+    if (snapshot.empty) {
+        return { success: true, message: "No bids found for the specified criteria to revert.", revertedBids: [] };
+    }
+
+    // Step 2: Aggregate all bids that need to be reverted, grouped by user.
+    const userRevertMap = new Map();
+    snapshot.docs.forEach(doc => {
+        const bid = { id: doc.id, ...doc.data() };
+        // Only process bids that are not already reverted.
+        if (bid.status !== 'reverted' && bid.uid && bid.bidAmount > 0) {
+            const userData = userRevertMap.get(bid.uid) || { totalRevertAmount: 0, bidsToUpdate: [] };
+            userData.totalRevertAmount += bid.bidAmount;
+            // Store the info needed for the batch update and the final return list.
+            userData.bidsToUpdate.push({
+                bidId: bid.id,
+                bidAmount: bid.bidAmount,
+                gameType: bid.gameType,
+            });
+            userRevertMap.set(bid.uid, userData);
+        }
+    });
+
+    if (userRevertMap.size === 0) {
+        return { success: true, message: "All bids for the criteria were already reverted or had no amount.", revertedBids: [] };
+    }
+
+    // Step 3: Fetch user and funds information for all affected users.
+    const uids = Array.from(userRevertMap.keys());
+    const [userInfoMap, fundsSnapshot] = await Promise.all([
+        _fetchAuthInfoByUids(uids),
+        db.collection(FUNDS_COLLECTION).where('uid', 'in', uids).get()
+    ]);
+    const userFundsMap = new Map(fundsSnapshot.docs.map(doc => [doc.data().uid, { ref: doc.ref, data: doc.data() }]));
+
+    const batch = db.batch();
+    const revertedBidsList = [];
+    let bidsRevertedCount = 0;
+
+    // Step 4: Build the atomic batch write and the detailed return list.
+    for (const [uid, revertData] of userRevertMap.entries()) {
+        const fundDoc = userFundsMap.get(uid);
+        const userInfo = userInfoMap.get(uid) || { username: "N/A" };
+
+        if (fundDoc) {
+            const balanceBefore = fundDoc.data.balance || 0;
+
+            // Add the balance update to the batch using atomic increment.
+            batch.update(fundDoc.ref, {
+                balance: admin.firestore.FieldValue.increment(revertData.totalRevertAmount)
+            });
+
+            // Add the transaction log to the batch.
+            const logRef = db.collection(FUNDS_TRANSACTIONS_COLLECTION).doc();
+            batch.set(logRef, {
+                uid,
+                amount: revertData.totalRevertAmount,
+                balanceBefore,
+                balanceAfter: balanceBefore + revertData.totalRevertAmount,
+                reason: `Bid Revert - Game: ${gameId || 'All'}, Date: ${date || 'All'}`,
+                type: "credit",
+                timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            });
+        } else {
+            console.warn(`Could not find funds document for user ${uid}. Skipping fund revert.`);
+        }
+
+        // Add each bid status update to the batch and build the return list.
+        revertData.bidsToUpdate.forEach(bid => {
+            const bidRef = db.collection(GAME_SUBMISSIONS_COLLECTION).doc(bid.bidId);
+            batch.update(bidRef, { status: "reverted" });
+            bidsRevertedCount++;
+
+            revertedBidsList.push({
+                username: userInfo.username,
+                bidAmount: bid.bidAmount,
+                gameType: bid.gameType,
+            });
+        });
+    }
+
+    // Step 5: Commit the batch and return the results.
+    try {
+        await batch.commit();
+        return {
+            success: true,
+            message: `Successfully reverted ${bidsRevertedCount} bids for ${userRevertMap.size} users.`,
+            revertedBids: revertedBidsList
+        };
+    } catch (error) {
+        console.error("Error committing bid revert batch:", error);
+        throw new Error("Failed to revert bids due to a database error.");
+    }
+};
+
+/**
+ * Clears (deletes) all bids that have already been marked as 'reverted'
+ * based on dynamic criteria (date and/or gameId).
+ * This function DOES NOT refund any money; it only cleans up old records.
+ * @param {object} params - The criteria for clearing bids.
+ * @param {string} [params.date] - The date for which to clear reverted bids, in 'YYYY-MM-DD' format.
+ * @param {string} [params.gameId] - The specific gameId to clear reverted bids for.
+ * @returns {Promise<{success: boolean, message: string}>}
+ */
+export const clearRevertedBids = async ({ date, gameId }) => {
+    if (!date && !gameId) {
+        throw new Error("clearRevertedBids(): At least one criterion (date or gameId) is required.");
+    }
+
+    // Step 1: Build a query to find only bids with status 'reverted'.
+    let query = db.collection(GAME_SUBMISSIONS_COLLECTION).where("status", "==", "reverted");
+
+    if (date) {
+        const startDate = new Date(`${date}T00:00:00.000Z`);
+        const endDate = new Date(`${date}T23:59:59.999Z`);
+        query = query.where("createdAt", ">=", startDate).where("createdAt", "<=", endDate);
+    }
+    if (gameId) {
+        query = query.where("gameId", "==", gameId);
+    }
+
+    const snapshot = await query.get();
+
+    if (snapshot.empty) {
+        return { success: true, message: "No reverted bids found for the specified criteria to clear." };
+    }
+
+    // Step 2: Batch the delete operations to handle large numbers of documents safely.
+    // Firestore batches are limited to 500 operations each.
+    const docRefs = snapshot.docs.map(doc => doc.ref);
+    const chunks = _chunkArray(docRefs, 500);
+    const batchPromises = [];
+
+    for (const chunk of chunks) {
+        const batch = db.batch();
+        for (const ref of chunk) {
+            batch.delete(ref);
+        }
+        batchPromises.push(batch.commit());
+    }
+
+    // Step 3: Execute all batches and return the result.
+    try {
+        await Promise.all(batchPromises);
+        return { success: true, message: `Successfully cleared ${snapshot.size} reverted bids.` };
+    } catch (error) {
+        console.error("Error committing bid clearing batch:", error);
+        throw new Error("Failed to clear reverted bids due to a database error.");
     }
 };

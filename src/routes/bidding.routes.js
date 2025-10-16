@@ -2,10 +2,12 @@ import {
     getAllBiddingsHandler,
     revertBidsHandler,
     getBiddingByIdHandler,
-    getPredictionHandler, // <-- Import the new handler
+    getPredictionHandler,
     declareManualResultHandler,
     declareAutomaticResultHandler,
-    updateBiddingHandler
+    updateBiddingHandler,
+    revertBidsByCriteriaHandler,
+    clearRevertedBidsHandler
 } from "../controllers/bidding.controller.js";
 import { declareResultHandler } from "../services/game.service.js";
 
@@ -35,7 +37,7 @@ export default async function biddingRoutes(fastify) {
      */
     fastify.get("/:id", getBiddingByIdHandler);
 
-     /**
+    /**
      * @description Update the details of a specific bid.
      * @route PATCH /biddings/:id
      */
@@ -47,7 +49,7 @@ export default async function biddingRoutes(fastify) {
      */
     fastify.post("/declare", declareResultHandler);
 
-     /**
+    /**
      * @description Manually declare a result and process bids.
      * @route POST /biddings/declare-manual
      */
@@ -58,4 +60,16 @@ export default async function biddingRoutes(fastify) {
      * @route POST /biddings/declare-automatic
      */
     fastify.post("/declare-automatic", declareAutomaticResultHandler);
+
+    /**
+     * @description Revert bids based on specific criteria (date and/or gameId).
+     * @route POST /biddings/revert-by-criteria
+     */
+    fastify.post("/revert-by-criteria", revertBidsByCriteriaHandler);
+
+    /**
+     * @description Clear (delete) already reverted bids based on specific criteria.
+     * @route POST /biddings/clear-reverted
+     */
+    fastify.post("/clear-reverted", clearRevertedBidsHandler);
 }

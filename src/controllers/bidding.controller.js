@@ -80,31 +80,20 @@ export async function revertBidsHandler(request, reply) {
 export async function getPredictionHandler(request, reply) {
     try {
         const { gameId, date, type, openPanna, closePanna } = request.body;
-
         if (!gameId || !date || !openPanna || !closePanna) {
             return reply.code(400).send({ error: "Required fields are missing. 'gameId', 'date', 'openPanna', and 'closePanna' are mandatory." });
         }
-
         const predictionDate = new Date(date);
         if (isNaN(predictionDate.getTime())) {
             return reply.code(400).send({ error: "Invalid 'date' format. Please use a valid date string like YYYY-MM-DD." });
         }
-
-        const winners = await getPrediction({
-            gameId,
-            date: predictionDate,
-            type: type || null, // Ensure type is null if not provided
-            openPanna,
-            closePanna,
-        });
-
+        const winners = await getPrediction({ gameId, date: predictionDate, type: type || null, openPanna, closePana });
         return reply.send({ data: winners });
     } catch (error) {
         console.error("Error in getPredictionHandler:", error);
         return reply.code(500).send({ error: error.message || "An internal server error occurred." });
     }
 }
-
 
 /**
  * Handler to update the details of a specific bid.
@@ -114,14 +103,11 @@ export async function updateBiddingHandler(request, reply) {
     try {
         const { id } = request.params;
         const updateData = request.body;
-
         if (!updateData || Object.keys(updateData).length === 0) {
             return reply.code(400).send({ error: "Request body must contain fields to update." });
         }
-
         const result = await biddingService.updateBidding({ bidId: id, data: updateData });
         return reply.send(result);
-
     } catch (error) {
         console.error(`Error in updateBiddingHandler for bid ${request.params.id}:`, error);
         return reply.code(500).send({ error: error.message });
@@ -138,29 +124,23 @@ export async function declareManualResultHandler(request, reply) {
         if (!gameId || !date || !openPana || !closePana) {
             return reply.code(400).send({ error: "Required fields: 'gameId', 'date', 'openPana', 'closePana'." });
         }
-        
         const resultDate = new Date(date);
         if (isNaN(resultDate.getTime())) {
             return reply.code(400).send({ error: "Invalid 'date' format. Use YYYY-MM-DD." });
         }
-        
         const startDate = new Date(resultDate);
         startDate.setHours(0, 0, 0, 0);
         const endDate = new Date(resultDate);
         endDate.setHours(23, 59, 59, 999);
-        
         const sumDigits = (numStr) => String(numStr).split('').reduce((sum, digit) => sum + parseInt(digit, 10), 0) % 10;
-
         const overrideList = {
             [gameId]: {
                 firstHalf: `${sumDigits(openPana)}-${openPana}`,
                 secondHalf: `${sumDigits(closePana)}-${closePana}`,
             }
         };
-
         const summary = await processGameResults({ startDate, endDate, overrideList });
         return reply.send({ success: true, message: "Manual result declared successfully.", data: summary });
-
     } catch (error) {
         console.error("Error in declareManualResultHandler:", error);
         return reply.code(500).send({ error: error.message || "An internal error occurred." });
@@ -177,24 +157,56 @@ export async function declareAutomaticResultHandler(request, reply) {
         if (!date) {
             return reply.code(400).send({ error: "A 'date' (YYYY-MM-DD) is required." });
         }
-
         const resultDate = new Date(date);
         if (isNaN(resultDate.getTime())) {
             return reply.code(400).send({ error: "Invalid 'date' format. Use YYYY-MM-DD." });
         }
-
         const startDate = new Date(resultDate);
         startDate.setHours(0, 0, 0, 0);
         const endDate = new Date(resultDate);
         endDate.setHours(23, 59, 59, 999);
-
-        // Call the service WITHOUT an overrideList to trigger the scraper
         const summary = await processGameResults({ startDate, endDate });
-
         return reply.send({ success: true, message: "Automatic result declaration initiated.", data: summary });
-
     } catch (error) {
         console.error("Error in declareAutomaticResultHandler:", error);
         return reply.code(500).send({ error: error.message || "An internal server error occurred." });
+    }
+}
+
+// --- NEW HANDLERS ADDED BELOW ---
+
+/**
+ * Handler to revert bids based on specific criteria (date and/or gameId).
+ * @route POST /biddings/revert-by-criteria
+ */
+export async function revertBidsByCriteriaHandler(request, reply) {
+    try {
+        const { date, gameId } = request.body;
+        if (!date && !gameId) {
+            return reply.code(400).send({ error: "At least one criterion ('date' or 'gameId') is required." });
+        }
+        const result = await biddingService.revertBidsByCriteria({ date, gameId });
+        return reply.send(result);
+    } catch (error) {
+        console.error("Error in revertBidsByCriteriaHandler:", error);
+        return reply.code(500).send({ error: error.message });
+    }
+}
+
+/**
+ * Handler to clear (delete) already reverted bids based on specific criteria.
+ * @route POST /biddings/clear-reverted
+ */
+export async function clearRevertedBidsHandler(request, reply) {
+    try {
+        const { date, gameId } = request.body;
+        if (!date && !gameId) {
+            return reply.code(400).send({ error: "At least one criterion ('date' or 'gameId') is required." });
+        }
+        const result = await biddingService.clearRevertedBids({ date, gameId });
+        return reply.send(result);
+    } catch (error) {
+        console.error("Error in clearRevertedBidsHandler:", error);
+        return reply.code(500).send({ error: error.message });
     }
 }
