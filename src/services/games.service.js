@@ -19,20 +19,28 @@ export const getAllGames = async () => {
  * @param {object} params - The parameters for the function.
  * @param {string} params.id - The unique ID of the game (e.g., 'kalyan-morning-panel-chart').
  * @param {string} params.name - The original name of the game (e.g., 'KALYAN MORNING').
+ * @param {string} params.openTime - The opening time for the game (e.g., "10:00 AM").
+ * @param {string} params.closeTime - The closing time for the game (e.g., "11:00 AM").
  * @returns {Promise<object>} The newly created game document.
  */
-export const addGame = async ({ id, name }) => {
-    if (!id || !name) throw new Error("Game ID and name are required.");
+export const addGame = async ({ id, name, openTime, closeTime }) => {
+    if (!id || !name || !openTime || !closeTime) {
+        throw new Error("Game ID, name, openTime, and closeTime are required.");
+    }
 
     const docRef = db.collection(GAMES_COLLECTION).doc(id);
     const doc = await docRef.get();
-    if (doc.exists) throw new Error("This game already exists in the database.");
+    if (doc.exists) {
+        throw new Error("This game already exists in the database.");
+    }
 
     const newGameData = {
         id,
         name,
         altName: null,
         isDisabled: false,
+        openTime,
+        closeTime,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
     };
 
