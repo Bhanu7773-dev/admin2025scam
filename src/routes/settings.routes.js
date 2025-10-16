@@ -4,6 +4,7 @@ import {
     getGameRatesHandler, 
     updateGameRatesHandler   
 } from "../controllers/settings.controller.js";
+import { getStarlineGameRatesHandler, updateStarlineGameRatesHandler } from "../controllers/starline.settings.controller.js";
 
 /**
  * Encapsulates routes related to general application settings.
@@ -41,4 +42,23 @@ export function gameRatesRoutes(fastify) {
      * @bodyparam {object} - A flat object containing the rate fields to update.
      */
     fastify.patch('/', updateGameRatesHandler);
+}
+
+/**
+ * Encapsulates routes related to game rate settings.
+ * @param {import("fastify").FastifyInstance} fastify - The Fastify instance.
+ */
+export function starlineGameRatesRoutes(fastify) {
+    /**
+     * @description Get all game rates combined into one object.
+     * @route GET /starline-game-rates
+     */
+    fastify.get('/', getStarlineGameRatesHandler);
+
+    /**
+     * @description Update one or more game rates.
+     * @route PATCH /game-rates
+     * @bodyparam {object} - A flat object containing the rate fields to update.
+     */
+    fastify.patch('/', updateStarlineGameRatesHandler);
 }

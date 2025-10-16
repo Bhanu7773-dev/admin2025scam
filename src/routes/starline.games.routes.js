@@ -1,13 +1,15 @@
-import { getGames, addGame, updateGame, deleteGame} from "../services/starline.game.service.js"
+import { getGames, addGame, updateGame, deleteGame } from "../services/starline.game.service.js";
+// ✅ NEW: Import the result handlers
+import { declareStarlineResultHandler, getStarlineResultsHandler } from "../controllers/starline.settings.controller.js";
 
 const gameBodySchema = {
     type: 'object',
-    required: ['gameName', 'openTime', 'status'],
+    required: ['games_name', 'close_time', 'game_status'],
     properties: {
-        gameName: { type: 'string' },
-        gameNameHindi: { type: 'string' },
-        openTime: { type: 'string', pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$' }, // HH:mm format
-        status: { type: 'string', enum: ['0', '1'] },
+        games_name: { type: 'string' },
+        games_name_hindi: { type: 'string' },
+        close_time: { type: 'string', pattern: '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$' }, // HH:mm format
+        game_status: { type: 'string', enum: ['0', '1'] },
     },
 };
 
@@ -19,7 +21,6 @@ const gameParamsSchema = {
     },
 };
 
-
 /**
  * Encapsulates the routes for the Starline Games API.
  * @param {import('fastify').FastifyInstance} fastify - Fastify instance.
@@ -27,24 +28,18 @@ const gameParamsSchema = {
  */
 async function starlineGameController(fastify, options) {
     
-    /**
-     * Route to get all starline games.
-     * GET /games
-     */
+    // --- Game Management Routes ---
+
     fastify.get('/', async (request, reply) => {
         try {
             const games = await getGames();
-            reply.send(games);
+            reply.send({ data: games }); // Return in a consistent { data: ... } format
         } catch (error) {
             request.log.error(error);
             reply.status(500).send({ error: 'Failed to fetch games.' });
         }
     });
 
-    /**
-     * Route to add a new starline game.
-     * POST /games
-     */
     fastify.post('/', { schema: { body: gameBodySchema } }, async (request, reply) => {
         try {
             const gameId = await addGame(request.body);
@@ -55,10 +50,6 @@ async function starlineGameController(fastify, options) {
         }
     });
 
-    /**
-     * Route to update an existing starline game.
-     * PUT /games/:id
-     */
     fastify.put('/:id', { schema: { body: gameBodySchema, params: gameParamsSchema } }, async (request, reply) => {
         try {
             const { id } = request.params;
@@ -71,10 +62,6 @@ async function starlineGameController(fastify, options) {
         }
     });
 
-    /**
-     * Route to delete a starline game.
-     * DELETE /games/:id
-     */
     fastify.delete('/:id', { schema: { params: gameParamsSchema } }, async (request, reply) => {
         try {
             const { id } = request.params;
@@ -85,6 +72,20 @@ async function starlineGameController(fastify, options) {
             reply.status(500).send({ error: 'Failed to delete game.' });
         }
     });
+
+    // --- ✅ NEW: Starline Result Routes ---
+
+    /**
+     * Route to declare a new starline game result.
+     * POST /starline-results/declare
+     */
+    fastify.post('/results/declare', declareStarlineResultHandler);
+
+    /**
+     * Route to get all starline game results, with optional filters.
+     * GET /starline-results
+     */
+    fastify.get('/results', getStarlineResultsHandler);
 }
 
 export default starlineGameController;

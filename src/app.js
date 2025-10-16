@@ -10,7 +10,7 @@ import usersRoutes from "./routes/users.routes.js";
 import fundsRoutes from "./routes/funds.routes.js";
 // import frontendRoutes from "./routes/frontend.routes.js";
 // V V V MODIFIED IMPORT V V V
-import { settingsRoutes, gameRatesRoutes } from "./routes/settings.routes.js";
+import { settingsRoutes, gameRatesRoutes, starlineGameRatesRoutes } from "./routes/settings.routes.js";
 import biddingRoutes from "./routes/bidding.routes.js";
 import { sendNotificationHandler } from "./controllers/notification.controller.js";
 import { verifyFirebaseIdToken } from './plugins/firebaseAuth.js';
@@ -62,6 +62,8 @@ app.register(settingsRoutes, { prefix: "/settings" });
 
 // V V V NEWLY ADDED ROUTE V V V
 app.register(gameRatesRoutes, { prefix: "/game-rates" });
+
+app.register(starlineGameRatesRoutes, { prefix: "/starline-game-rates" });
 
 // Protect notify route with Firebase token verification. If you want to allow anonymous broadcasts,
 // call the route without a token. Currently this will require a Bearer ID token from Firebase.
