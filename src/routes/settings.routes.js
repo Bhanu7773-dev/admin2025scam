@@ -1,3 +1,4 @@
+import { getJackpotGameRatesHandler, updateJackpotGameRatesHandler } from "../controllers/jackpot.settings.controller.js";
 import {
     getSettingsHandler,
     updateSettingsHandler,
@@ -61,4 +62,23 @@ export function starlineGameRatesRoutes(fastify) {
      * @bodyparam {object} - A flat object containing the rate fields to update.
      */
     fastify.patch('/', updateStarlineGameRatesHandler);
+}
+
+/**
+ * Encapsulates routes related to game rate settings.
+ * @param {import("fastify").FastifyInstance} fastify - The Fastify instance.
+ */
+export function jackpotGameRatesRoutes(fastify) {
+    /**
+     * @description Get all game rates combined into one object.
+     * @route GET /jackpot-game-rates
+     */
+    fastify.get('/', getJackpotGameRatesHandler);
+
+    /**
+     * @description Update one or more game rates.
+     * @route PATCH /game-rates
+     * @bodyparam {object} - A flat object containing the rate fields to update.
+     */
+    fastify.patch('/', updateJackpotGameRatesHandler);
 }

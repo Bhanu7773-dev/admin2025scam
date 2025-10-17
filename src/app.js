@@ -10,12 +10,13 @@ import usersRoutes from "./routes/users.routes.js";
 import fundsRoutes from "./routes/funds.routes.js";
 // import frontendRoutes from "./routes/frontend.routes.js";
 // V V V MODIFIED IMPORT V V V
-import { settingsRoutes, gameRatesRoutes, starlineGameRatesRoutes } from "./routes/settings.routes.js";
+import { settingsRoutes, gameRatesRoutes, starlineGameRatesRoutes, jackpotGameRatesRoutes } from "./routes/settings.routes.js";
 import biddingRoutes from "./routes/bidding.routes.js";
 import { sendNotificationHandler } from "./controllers/notification.controller.js";
 import { verifyFirebaseIdToken } from './plugins/firebaseAuth.js';
 import gamesRoutes from "./routes/games.routes.js";
 import starlineGameController from "./routes/starline.games.routes.js";
+import jackpotGameController from "./routes/jackpot.games.routes.js";
 
 const app = Fastify({ logger: false });
 
@@ -52,10 +53,11 @@ app.register(adminRoutes, { prefix: "/admin" });
 app.register(usersRoutes, { prefix: "/users" });
 app.register(fundsRoutes, { prefix: "/funds" });
 app.register(biddingRoutes, { prefix: "/biddings" });
-app.register(gamesRoutes, { prefix: "/games"})
+app.register(gamesRoutes, { prefix: "/games" })
 
 // New Format 
-app.register(starlineGameController, { prefix: "/starline-games"})
+app.register(starlineGameController, { prefix: "/starline-games" })
+app.register(jackpotGameController, { prefix: "/jackpot-games" })
 
 // Settings Routes
 app.register(settingsRoutes, { prefix: "/settings" });
@@ -64,6 +66,7 @@ app.register(settingsRoutes, { prefix: "/settings" });
 app.register(gameRatesRoutes, { prefix: "/game-rates" });
 
 app.register(starlineGameRatesRoutes, { prefix: "/starline-game-rates" });
+app.register(jackpotGameRatesRoutes, { prefix: "/jackpot-game-rates" });
 
 // Protect notify route with Firebase token verification. If you want to allow anonymous broadcasts,
 // call the route without a token. Currently this will require a Bearer ID token from Firebase.
