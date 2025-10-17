@@ -1,5 +1,5 @@
 import { getStarlineGameRates, updateStarlineGameRates } from "../services/starline.settings.service.js";
-import { declareStarlineResult, getStarlineResults } from "../services/starline.game.service.js";
+import { declareStarlineResult, getStarlineResults, predictStarlineWinners } from "../services/starline.game.service.js";
 
 /**
  * Handler to declare or update a Starline game result.
@@ -73,5 +73,26 @@ export async function updateStarlineGameRatesHandler(req, reply) {
     } catch (error) {
         console.error("Error in updateStarlineGameRatesHandler:", error);
         return reply.code(500).send({ error: error.message });
+    }
+}
+
+/**
+ * Handler to predict winners for a Starline game result without saving.
+ * @route POST /starline-games/results/predict
+ */
+export async function predictStarlineWinnersHandler(request, reply) {
+    try {
+        const { gameTitle, openingPanna, declarationDate } = request.body;
+
+        if (!gameTitle || !openingPanna || !declarationDate) {
+            return reply.code(400).send({ error: "Missing required fields: gameTitle, openingPanna, and declarationDate." });
+        }
+
+        const winners = await predictStarlineWinners({ gameTitle, openingPanna, declarationDate });
+        return reply.send({ data: winners });
+
+    } catch (error) {
+        console.error("Error in predictStarlineWinnersHandler:", error);
+        return reply.code(500).send({ error: error.message || "An internal server error occurred." });
     }
 }

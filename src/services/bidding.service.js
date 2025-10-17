@@ -56,11 +56,27 @@ const _fetchAuthInfoByUids = async (uids) => {
  * @param {object} [options={}] - Options for fetching data.
  * @param {number} [options.limit=20] - The number of documents to fetch per page.
  * @param {string} [options.startAfterId] - The document ID to start pagination after.
+ * @param {'win'|'lost'|'pending'} [options.status] - Filter submissions by their status.
+ * @param {boolean} [options.starline] - Filter by starline games. `true` for starline only, `false` for non-starline, and `undefined` for both.
  * @returns {Promise<{biddings: Array<object>, nextCursor: string|null}>}
  */
-export const getAllBiddings = async ({ limit = 20, startAfterId } = {}) => {
-    let query = db.collection(GAME_SUBMISSIONS_COLLECTION).orderBy("createdAt", "desc").limit(limit);
+export const getAllBiddings = async ({ limit = 20, startAfterId, status, starline } = {}) => {
+    // Base query
+    let query = db.collection(GAME_SUBMISSIONS_COLLECTION);
 
+    // Conditionally apply filters
+    if (status) {
+        query = query.where("status", "==", status);
+    }
+    // Check for boolean true/false, but not for null/undefined
+    if (starline !== undefined && starline !== null) {
+        query = query.where("isStarline", "==", starline);
+    }
+
+    // Apply ordering and limit
+    query = query.orderBy("createdAt", "desc").limit(limit);
+
+    // Handle pagination
     if (startAfterId) {
         const lastDoc = await db.collection(GAME_SUBMISSIONS_COLLECTION).doc(startAfterId).get();
         if (lastDoc.exists) {
@@ -74,6 +90,8 @@ export const getAllBiddings = async ({ limit = 20, startAfterId } = {}) => {
     }
 
     const submissions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    // The rest of the logic for enriching data remains the same
     const uids = [...new Set(submissions.map(sub => sub.uid).filter(Boolean))];
     const userInfoMap = await _fetchAuthInfoByUids(uids);
 

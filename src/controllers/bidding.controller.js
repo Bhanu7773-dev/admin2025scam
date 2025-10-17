@@ -21,19 +21,36 @@ export async function getUserBiddingsHandler(request, reply) {
 
 /**
  * Handler to get a paginated list of all biddings from all users.
- * @route GET /biddings
+ * Supports filtering by status and starline.
+ * @route GET /biddings?status=win&starline=true&limit=20
  */
 export async function getAllBiddingsHandler(request, reply) {
     try {
-        const { limit, startAfterId } = request.query;
-        const result = await biddingService.getAllBiddings({
+        // Destructure all potential query params
+        const { limit, startAfterId, status, starline } = request.query;
+
+        // Prepare the options object for the service layer
+        const options = {
             limit: Number(limit) || 20,
             startAfterId: startAfterId || null,
-        });
+        };
+
+        // Add status if it's a valid value
+        if (status === 'win' || status === 'lost' || status === 'pending') {
+            options.status = status;
+        }
+
+        // Convert starline query string ('true'/'false') to boolean
+        if (starline === 'true') {
+            options.starline = true;
+        } else if (starline === 'false') {
+            options.starline = false;
+        }
+
+        const result = await biddingService.getAllBiddings(options);
         return reply.send({ data: result });
     } catch (error) {
-        console.error("Error in getAllBiddingsHandler:", error);
-        return reply.code(500).send({ error: "An internal server error occurred." });
+        console.error("Error in getAllBiddingsHandler:", error); return reply.code(500).send({ error: "An internal server error occurred." });
     }
 }
 
@@ -87,7 +104,7 @@ export async function getPredictionHandler(request, reply) {
         if (isNaN(predictionDate.getTime())) {
             return reply.code(400).send({ error: "Invalid 'date' format. Please use a valid date string like YYYY-MM-DD." });
         }
-        const winners = await getPrediction({ gameId, date: predictionDate, type: type || null, openPanna, closePana });
+        const winners = await getPrediction({ gameId, date: predictionDate, type: type || null, openPanna, closePanna });
         return reply.send({ data: winners });
     } catch (error) {
         console.error("Error in getPredictionHandler:", error);

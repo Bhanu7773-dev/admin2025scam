@@ -54,8 +54,8 @@ export const getSettings = async () => {
 
 /**
  * Updates multiple setting documents in a single atomic transaction.
- * It takes a flat object from the client and maps the fields to their correct Firestore documents.
- * @param {object} newSettings - A flat object containing all the settings to be updated.
+ * It dynamically builds the update payload, only including fields that are present in the request body.
+ * @param {object} newSettings - A flat object containing the settings to be updated.
  * @returns {Promise<{success: boolean, message: string}>} A promise that resolves on completion.
  */
 export const updateSettings = async (newSettings) => {
@@ -63,68 +63,96 @@ export const updateSettings = async (newSettings) => {
         throw new Error("updateSettings(): newSettings object is required.");
     }
 
-    // Create a Firestore batch to update all documents atomically
     const batch = db.batch();
     const serverTimestamp = admin.firestore.FieldValue.serverTimestamp();
 
+    // Helper function to create an update object only with defined fields
+    const createUpdateObject = (fields) => {
+        const updateData = {};
+        for (const key in fields) {
+            if (fields[key] !== undefined) {
+                updateData[key] = fields[key];
+            }
+        }
+        return updateData;
+    };
+
     // 1. Maintenance Settings
-    const maintenanceRef = db.collection(SETTINGS_COLLECTION).doc('maintenance');
-    const maintenanceData = {
+    const maintenanceData = createUpdateObject({
         isUnderMaintenance: newSettings.isUnderMaintenance,
         description: newSettings.description,
-        lastUpdated: serverTimestamp
-    };
-    batch.set(maintenanceRef, maintenanceData, { merge: true });
+    });
+    if (Object.keys(maintenanceData).length > 0) {
+        maintenanceData.lastUpdated = serverTimestamp;
+        batch.set(db.collection(SETTINGS_COLLECTION).doc('maintenance'), maintenanceData, { merge: true });
+    }
 
     // 2. Minimum Withdrawal Setting
-    const minWithdrawalRef = db.collection(SETTINGS_COLLECTION).doc('min_withdrawal');
-    const minWithdrawalData = {
-        amount: Number(newSettings.amount) || 0,
-        lastUpdated: serverTimestamp
-    };
-    batch.set(minWithdrawalRef, minWithdrawalData, { merge: true });
+    if (newSettings.amount !== undefined) {
+        const minWithdrawalData = {
+            amount: Number(newSettings.amount) || 0,
+            lastUpdated: serverTimestamp
+        };
+        batch.set(db.collection(SETTINGS_COLLECTION).doc('min_withdrawal'), minWithdrawalData, { merge: true });
+    }
 
     // 3. Support Contact Settings
-    const supportRef = db.collection(SETTINGS_COLLECTION).doc('support');
-    const supportData = {
+    const supportData = createUpdateObject({
         phone: newSettings.phone,
         display_phone1: newSettings.display_phone1,
         display_phone2: newSettings.display_phone2,
-        lastUpdated: serverTimestamp
-    };
-    batch.set(supportRef, supportData, { merge: true });
+    });
+    if (Object.keys(supportData).length > 0) {
+        supportData.lastUpdated = serverTimestamp;
+        batch.set(db.collection(SETTINGS_COLLECTION).doc('support'), supportData, { merge: true });
+    }
 
     // 4. UPI QR Code Setting
-    const upiRef = db.collection(SETTINGS_COLLECTION).doc('upi');
-    const upiData = {
+    const upiData = createUpdateObject({
         qr_code_base64: newSettings.qr_code_base64,
-        lastUpdated: serverTimestamp
-    };
-    batch.set(upiRef, upiData, { merge: true });
+        upi_id: newSettings.upi_id
+    });
+    if (Object.keys(upiData).length > 0) {
+        upiData.lastUpdated = serverTimestamp;
+        batch.set(db.collection(SETTINGS_COLLECTION).doc('upi'), upiData, { merge: true });
+    }
 
     // 5. Website URL Setting
-    const websiteRef = db.collection(SETTINGS_COLLECTION).doc('website');
-    const websiteData = {
-        url: newSettings.url,
-        lastUpdated: serverTimestamp
-    };
-    batch.set(websiteRef, websiteData, { merge: true });
+    if (newSettings.url !== undefined) {
+        const websiteData = {
+            url: newSettings.url,
+            lastUpdated: serverTimestamp
+        };
+        batch.set(db.collection(SETTINGS_COLLECTION).doc('website'), websiteData, { merge: true });
+    }
 
-    // 6. Share URL Setting
-    const shareRef = db.collection("sharelink").doc("main")
-    const shareData = {
+    // 6. Share Link Setting
+    const shareData = createUpdateObject({
         url: newSettings.shareLink,
-        updatedAt: serverTimestamp
+        content: newSettings.content
+    });
+    if (Object.keys(shareData).length > 0) {
+        shareData.updatedAt = serverTimestamp;
+        batch.set(db.collection("sharelink").doc("main"), shareData, { merge: true });
     }
-    batch.set(shareRef, shareData, { merge: true });
 
-    // 7. Market Time Settings
-    const marketTimeRef = db.collection(SETTINGS_COLLECTION).doc("market_time");
-    const marketTimeData = {
-        createdAt: serverTimestamp,
-        text: newSettings.text
+    // 7. Market Time Setting
+    if (newSettings.time !== undefined) {
+        const marketTimeData = {
+            time: newSettings.time,
+            lastUpdated: serverTimestamp
+        };
+        batch.set(db.collection(SETTINGS_COLLECTION).doc("market_time"), marketTimeData, { merge: true });
     }
-    batch.set(marketTimeRef, marketTimeData, { merge: true})
+    
+    // 8. Marquee Setting
+    if (newSettings.marquee !== undefined) {
+        const marqueeData = {
+            text: newSettings.marquee,
+            lastUpdated: serverTimestamp
+        };
+        batch.set(db.collection(SETTINGS_COLLECTION).doc("marquee"), marqueeData, { merge: true });
+    }
 
     try {
         await batch.commit();

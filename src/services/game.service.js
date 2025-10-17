@@ -391,10 +391,10 @@ export const processGameResults = async ({ startDate, endDate, overrideList = nu
  * This function is READ-ONLY and does not update the database.
  */
 export const getPrediction = async ({ gameId, date, type, openPanna, closePanna }) => {
-    if (!gameId || !date || !openPanna || !closePana) {
+    if (!gameId || !date || !openPanna || !closePanna) {
         throw new Error("Missing required parameters: gameId, date, openPanna, and closePanna are required.");
     }
-    console.log(`[Prediction] Running for ${gameId} on ${date.toDateString()} with result ${openPanna}-${closePana}`);
+    console.log(`[Prediction] Running for ${gameId} on ${date.toDateString()} with result ${openPanna}-${closePanna}`);
 
     const flatGameRates = await getGameRates();
     const dynamicPayoutRates = normalizePayoutRates(flatGameRates);
@@ -424,7 +424,7 @@ export const getPrediction = async ({ gameId, date, type, openPanna, closePanna 
     const dailyResult = {
         openPanna,
         closePanna,
-        jodi: `${sumDigits(openPanna)}${sumDigits(closePana)}`,
+        jodi: `${sumDigits(openPanna)}${sumDigits(closePanna)}`,
         isClosed: false,
     };
 

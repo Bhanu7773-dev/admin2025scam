@@ -1,6 +1,5 @@
 import { getGames, addGame, updateGame, deleteGame } from "../services/starline.game.service.js";
-// ✅ NEW: Import the result handlers
-import { declareStarlineResultHandler, getStarlineResultsHandler } from "../controllers/starline.settings.controller.js";
+import { declareStarlineResultHandler, getStarlineResultsHandler, predictStarlineWinnersHandler } from "../controllers/starline.settings.controller.js";
 
 const gameBodySchema = {
     type: 'object',
@@ -21,11 +20,6 @@ const gameParamsSchema = {
     },
 };
 
-/**
- * Encapsulates the routes for the Starline Games API.
- * @param {import('fastify').FastifyInstance} fastify - Fastify instance.
- * @param {object} options - Plugin options.
- */
 async function starlineGameController(fastify, options) {
     
     // --- Game Management Routes ---
@@ -33,7 +27,7 @@ async function starlineGameController(fastify, options) {
     fastify.get('/', async (request, reply) => {
         try {
             const games = await getGames();
-            reply.send({ data: games }); // Return in a consistent { data: ... } format
+            reply.send({ data: games });
         } catch (error) {
             request.log.error(error);
             reply.status(500).send({ error: 'Failed to fetch games.' });
@@ -73,19 +67,17 @@ async function starlineGameController(fastify, options) {
         }
     });
 
-    // --- ✅ NEW: Starline Result Routes ---
+    // --- Starline Result Routes ---
 
-    /**
-     * Route to declare a new starline game result.
-     * POST /starline-results/declare
-     */
     fastify.post('/results/declare', declareStarlineResultHandler);
 
-    /**
-     * Route to get all starline game results, with optional filters.
-     * GET /starline-results
-     */
     fastify.get('/results', getStarlineResultsHandler);
+
+    /**
+     * Route to predict winners for a starline game result without saving.
+     * POST /starline-games/results/predict
+     */
+    fastify.post('/results/predict', predictStarlineWinnersHandler);
 }
 
 export default starlineGameController;
