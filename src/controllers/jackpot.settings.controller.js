@@ -7,14 +7,14 @@ import { declareJackpotResult, getJackpotResults, predictJackpotWinners } from "
  */
 export async function declareJackpotResultHandler(request, reply) {
     try {
-        const { gameId, gameTitle, openingPanna, declarationDate } = request.body;
+        const { gameId, gameTitle, jodi, declarationDate } = request.body;
 
         // Basic validation for required fields
-        if (!gameId || !gameTitle || !openingPanna || !declarationDate) {
-            return reply.code(400).send({ error: "Missing required fields: gameId, gameTitle, openingPanna, and declarationDate." });
+        if (!gameId || !gameTitle || !jodi || !declarationDate) {
+            return reply.code(400).send({ error: "Missing required fields: gameId, gameTitle, jodi, and declarationDate." });
         }
 
-        const result = await declareJackpotResult({ gameId, gameTitle, openingPanna, declarationDate });
+        const result = await declareJackpotResult({ gameId, gameTitle, jodi, declarationDate });
         return reply.code(201).send(result);
 
     } catch (error) {
@@ -82,13 +82,13 @@ export async function updateJackpotGameRatesHandler(req, reply) {
  */
 export async function predictJackpotWinnersHandler(request, reply) {
     try {
-        const { gameTitle, openingPanna, declarationDate } = request.body;
+        const { gameTitle, jodi, declarationDate } = request.body;
 
-        if (!gameTitle || !openingPanna || !declarationDate) {
-            return reply.code(400).send({ error: "Missing required fields: gameTitle, openingPanna, and declarationDate." });
+        if (!gameTitle || !jodi || !declarationDate) {
+            return reply.code(400).send({ error: "Missing required fields: gameTitle, jodi, and declarationDate." });
         }
 
-        const winners = await predictJackpotWinners({ gameTitle, openingPanna, declarationDate });
+        const winners = await predictJackpotWinners({ gameTitle, jodi, declarationDate });
         return reply.send({ data: winners });
 
     } catch (error) {

@@ -19,17 +19,17 @@ const _sumDigits = (pannaStr) => {
 /**
  * Declares a Jackpot game result, processes all pending bids, and updates user balances for winners.
  */
-export const declareJackpotResult = async ({ gameId, gameTitle, openingPanna, declarationDate }) => {
-    if (!gameId || !gameTitle || !openingPanna || !declarationDate) {
-        throw new Error("Missing required fields: gameId, gameTitle, openingPanna, and declarationDate.");
+export const declareJackpotResult = async ({ gameId, gameTitle, jodi, declarationDate }) => {
+    if (!gameId || !gameTitle || !jodi || !declarationDate) {
+        throw new Error("Missing required fields: gameId, gameTitle, jodi, and declarationDate.");
     }
-    if (!/^\d{3}$/.test(openingPanna)) {
-        throw new Error("Invalid format for openingPanna. It must be a 3-digit string.");
+    if (!/^\d{3}$/.test(jodi)) {
+        throw new Error("Invalid format for jodi. It must be a 3-digit string.");
     }
 
     const docId = `${declarationDate}_${gameId}`;
     const resultDocRef = db.collection(JACKPOT_RESULTS_COLLECTION).doc(docId);
-    await resultDocRef.set({ gameId, gameTitle, openingPanna, declarationDate, lastUpdated: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    await resultDocRef.set({ gameId, gameTitle, jodi, declarationDate, lastUpdated: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
 
     const startDate = new Date(declarationDate);
     startDate.setHours(0, 0, 0, 0);
@@ -52,7 +52,7 @@ export const declareJackpotResult = async ({ gameId, gameTitle, openingPanna, de
         return { success: true, message: `Result declared for ${gameTitle}. No pending bids found to process.` };
     }
 
-    const winningAnk = _sumDigits(openingPanna);
+    const winningAnk = _sumDigits(jodi);
     const batch = db.batch();
     const winningsByUser = new Map();
 
@@ -74,7 +74,7 @@ export const declareJackpotResult = async ({ gameId, gameTitle, openingPanna, de
             case "Double Pana":
             case "Triple Pana": {
                 console.log("Hora")
-                const panna = String(openingPanna);
+                const panna = String(jodi);
                 const answer = String(bid.answer).trim();
 
                 // --- SP Logic (Single Pana style) ---
@@ -250,12 +250,12 @@ export const deleteGame = async (gameId) => {
 /**
  * Predicts the winners for a jackpot game result without saving anything to the database.
  */
-export const predictJackpotWinners = async ({ gameTitle, openingPanna, declarationDate }) => {
-    if (!gameTitle || !openingPanna || !declarationDate) {
-        throw new Error("Missing required fields: gameTitle, openingPanna, and declarationDate are required.");
+export const predictJackpotWinners = async ({ gameTitle, jodi, declarationDate }) => {
+    if (!gameTitle || !jodi || !declarationDate) {
+        throw new Error("Missing required fields: gameTitle, jodi, and declarationDate are required.");
     }
-    if (!/^\d{3}$/.test(openingPanna)) {
-        throw new Error("Invalid format for openingPanna. It must be a 3-digit string.");
+    if (!/^\d{3}$/.test(jodi)) {
+        throw new Error("Invalid format for jodi. It must be a 3-digit string.");
     }
 
     const startDate = new Date(declarationDate);
@@ -276,7 +276,7 @@ export const predictJackpotWinners = async ({ gameTitle, openingPanna, declarati
         return [];
     }
 
-    const winningAnk = _sumDigits(openingPanna);
+    const winningAnk = _sumDigits(jodi);
     const winners = [];
 
     snapshot.docs.forEach(doc => {
@@ -295,7 +295,7 @@ export const predictJackpotWinners = async ({ gameTitle, openingPanna, declarati
             case "Single Pana":
             case "Double Pana":
             case "Triple Pana": {
-                const panna = String(openingPanna);
+                const panna = String(jodi);
                 const answer = String(bid.answer).trim();
 
                 // --- SP Logic (Single Pana style) ---
