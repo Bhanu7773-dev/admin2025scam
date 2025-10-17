@@ -52,25 +52,32 @@ const _fetchAuthInfoByUids = async (uids) => {
 };
 
 /**
- * Retrieves a paginated list of all game submissions (biddings), enriched with username and mobile.
- * @param {object} [options={}] - Options for fetching data.
- * @param {number} [options.limit=20] - The number of documents to fetch per page.
- * @param {string} [options.startAfterId] - The document ID to start pagination after.
- * @param {'win'|'lost'|'pending'} [options.status] - Filter submissions by their status.
- * @param {boolean} [options.starline] - Filter by starline games. `true` for starline only, `false` for non-starline, and `undefined` for both.
- * @returns {Promise<{biddings: Array<object>, nextCursor: string|null}>}
- */
-export const getAllBiddings = async ({ limit = 20, startAfterId, status, starline } = {}) => {
+* Retrieves a paginated list of all game submissions (biddings), enriched with username and mobile.
+*
+* @param {object} [options={}] - Options for fetching data.
+* @param {number} [options.limit=20] - The number of documents to fetch per page.
+* @param {string} [options.startAfterId] - The document ID to start pagination after.
+* @param {'win'|'lost'|'pending'} [options.status] - Filter submissions by their status.
+* @param {boolean} [options.starline] - Filter by starline games. `true` for starline only, `false` for non-starline.
+* @param {boolean} [options.jackpot] - Filter by jackpot games. `true` for jackpot only, `false` for non-jackpot.
+* @returns {Promise<{biddings: Array<object>, nextCursor: string|null}>}
+*/
+export const getAllBiddings = async ({ limit = 20, startAfterId, status, starline, jackpot } = {}) => {
     // Base query
     let query = db.collection(GAME_SUBMISSIONS_COLLECTION);
 
-    // Conditionally apply filters
+    // Conditionally apply filters independently
     if (status) {
         query = query.where("status", "==", status);
     }
+
     // Check for boolean true/false, but not for null/undefined
     if (starline !== undefined && starline !== null) {
         query = query.where("isStarline", "==", starline);
+    }
+
+    if (jackpot !== undefined && jackpot !== null) {
+        query = query.where("isJackpot", "==", jackpot);
     }
 
     // Apply ordering and limit

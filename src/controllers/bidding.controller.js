@@ -27,7 +27,7 @@ export async function getUserBiddingsHandler(request, reply) {
 export async function getAllBiddingsHandler(request, reply) {
     try {
         // Destructure all potential query params
-        const { limit, startAfterId, status, starline } = request.query;
+        const { limit, startAfterId, status, starline, jackpot } = request.query;
 
         // Prepare the options object for the service layer
         const options = {
@@ -45,6 +45,10 @@ export async function getAllBiddingsHandler(request, reply) {
             options.starline = true;
         } else if (starline === 'false') {
             options.starline = false;
+        } else if (jackpot == 'true') {
+            options.jackpot = true;
+        } else if (jackpot == 'false') {
+            options.jackpot = false;
         }
 
         const result = await biddingService.getAllBiddings(options);
