@@ -106,13 +106,15 @@ export const declareStarlineResult = async ({ gameId, gameTitle, openingPanna, d
         }
 
         if (isWinner) {
-            const rateKey = bid.gameType.toLowerCase().replace(/\s+/g, '-');
+            const baseKey = bid.gameType.toLowerCase().replace(/\s+/g, '_');
 
-            const rate = rates[rateKey];
+            const minRate = rates[`${baseKey}_1`];
+            const maxRate = rates[`${baseKey}_2`];
 
             let winningAmount = 0;
-            if (rate && rate.min_value && rate.max_value) {
-                winningAmount = (bid.bidAmount / rate.min_value) * rate.max_value;
+
+            if (minRate && maxRate) {
+                winningAmount = (bid.bidAmount / minRate) * maxRate;
             }
 
             batch.update(doc.ref, { status: 'won', winAmount: winningAmount });
