@@ -45,6 +45,7 @@ export const updateStarlineGameRates = async (newRates) => {
         { docId: 'single-pana', label: 'Single Pana', minKey: 'single_pana_1', maxKey: 'single_pana_2' },
         { docId: 'double-pana', label: 'Double Pana', minKey: 'double_pana_1', maxKey: 'double_pana_2' },
         { docId: 'triple-pana', label: 'Triple Pana', minKey: 'triple_pana_1', maxKey: 'triple_pana_2' },
+        { docId: 'odd-even', label: 'Odd Even', minKey: 'odd_even_1', maxKey: 'odd_even_2' },
     ];
 
     rateMappings.forEach(mapping => {
