@@ -56,7 +56,7 @@ export const declareStarlineResult = async ({ gameId, gameTitle, openingPanna, d
     const batch = db.batch();
     const winningsByUser = new Map();
 
-    bidsSnapshot.docs.forEach(doc => {
+    bidsSnapshot.docs.forEach(async (doc) => {
         const bid = { id: doc.id, ...doc.data() };
         console.log(bid)
         let isWinner = false;
@@ -140,7 +140,16 @@ export const declareStarlineResult = async ({ gameId, gameTitle, openingPanna, d
                 winningAmount = (bid.bidAmount / minRate) * maxRate;
             }
 
+            const fundRef = db.collection(FUNDS_COLLECTION).doc(bid.uid);
+            const fundSnap = await fundRef.get();
+
+            const currentBalance = fundSnap.exists ? fundSnap.data().balance || 0 : 0;
+            const balanceBefore = currentBalance;
+            const balanceAfter = balanceBefore + winningAmount;
+
             batch.update(doc.ref, { status: 'won', winAmount: winningAmount });
+
+            batch.update(fundRef, { balance: balanceAfter });
 
             const currentUserWinnings = winningsByUser.get(bid.uid) || 0;
             winningsByUser.set(bid.uid, currentUserWinnings + winningAmount);
@@ -151,8 +160,11 @@ export const declareStarlineResult = async ({ gameId, gameTitle, openingPanna, d
                 amount: winningAmount,
                 type: 'credit',
                 reason: `Starline Win: ${bid.gameType} on ${gameTitle}`,
+                balanceBefore,
+                balanceAfter,
                 timestamp: admin.firestore.FieldValue.serverTimestamp(),
             });
+
         } else {
             batch.update(doc.ref, { status: 'lost' });
         }
