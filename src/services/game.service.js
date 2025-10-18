@@ -170,7 +170,7 @@ function checkIfWinner(submission, dailyResult, type) {
             break;
         case 'Group Jodi':
         case 'Red Bracket':
-            const family = gameType === 'Group Jodi' ? findFamily(answer) : findRedFamily(answer);
+            const family = gameType === 'Group Jodi' ? findFamily(answer) : answer == 'Full Bracket' ? familiesRed['full_red'] : familiesRed['half_red'];
             isWinner = family?.includes(dailyResult.jodi) ?? false;
             break;
         case 'Half Sangam A':
