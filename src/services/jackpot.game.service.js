@@ -8,11 +8,11 @@ const FUNDS_COLLECTION = "funds";
 const FUNDS_TRANSACTIONS_COLLECTION = "funds_transactions";
 
 /**
- * Calculates the single-digits "Ank" from a 3-digit "Panna" string.
+ * Calculates the single-digits "Ank" from a 2-digit "Jodi" string.
  */
-const _sumDigits = (pannaStr) => {
-    if (!pannaStr || pannaStr.length !== 3) return '';
-    const sum = String(pannaStr).split('').reduce((acc, digit) => acc + parseInt(digit, 10), 0);
+const _sumDigits = (jodiStr) => {
+    if (!jodiStr || jodiStr.length !== 2) return '';
+    const sum = String(jodiStr).split('').reduce((acc, digit) => acc + parseInt(digit, 10), 0);
     return String(sum % 10);
 };
 
@@ -52,7 +52,6 @@ export const declareJackpotResult = async ({ gameId, gameTitle, jodi, declaratio
         return { success: true, message: `Result declared for ${gameTitle}. No pending bids found to process.` };
     }
 
-    const winningAnk = _sumDigits(jodi);
     const batch = db.batch();
     const winningsByUser = new Map();
 
@@ -62,58 +61,26 @@ export const declareJackpotResult = async ({ gameId, gameTitle, jodi, declaratio
         let isWinner = false;
 
         switch (bid.gameType) {
-            case "Single Digit":
-            case "Single Digits":
-                isWinner = bid.answer === winningAnk;
-                break;
-
-            case "SP - SP DP TP":
-            case "DP - SP DP TP":
-            case "TP - SP DP TP":
-            case "Single Pana":
-            case "Double Pana":
-            case "Triple Pana": {
-                console.log("Hora")
-                const panna = String(jodi);
+            case "Jodi":
                 const answer = String(bid.answer).trim();
-
-                // --- SP Logic (Single Pana style) ---
-                if (bid.gameType.startsWith("SP") || bid.gameType === "Single Pana") {
-                    isWinner = panna.includes(answer);
-                }
-                // --- DP Logic (Double Pana style) ---
-                else if (bid.gameType.startsWith("DP") || bid.gameType === "Double Pana") {
-                    isWinner = panna.includes(answer);
-                }
-                // --- TP Logic (Triple Pana style) ---
-                else if (bid.gameType.startsWith("TP") || bid.gameType === "Triple Pana") {
-                    isWinner = panna === answer;
-                } else {
-                    isWinner = false;
-                }
+                isWinner = jodi.includes(answer);
                 break;
-            }
-
-            case "Odd Even":
-                isWinner =
-                    bid.answer === "Even"
-                        ? parseInt(winningAnk) % 2 === 0
-                        : parseInt(winningAnk) % 2 !== 0;
-                break;
-
             default:
                 isWinner = false;
         }
 
         if (isWinner) {
-            const rateKey = bid.gameType.toLowerCase().replace(/\s+/g, '-');
+            const baseKey = bid.gameType.toLowerCase().replace(/\s+/g, '_');
 
-            const rate = rates[rateKey];
+            const minRate = rates[`${baseKey}_1`];
+            const maxRate = rates[`${baseKey}_2`];
 
             let winningAmount = 0;
-            if (rate && rate.min_value && rate.max_value) {
-                winningAmount = (bid.bidAmount / rate.min_value) * rate.max_value;
+
+            if (minRate && maxRate) {
+                winningAmount = (bid.bidAmount / minRate) * maxRate;
             }
+
 
             batch.update(doc.ref, { status: 'won', winAmount: winningAmount });
 
@@ -276,7 +243,6 @@ export const predictJackpotWinners = async ({ gameTitle, jodi, declarationDate }
         return [];
     }
 
-    const winningAnk = _sumDigits(jodi);
     const winners = [];
 
     snapshot.docs.forEach(doc => {
@@ -284,44 +250,10 @@ export const predictJackpotWinners = async ({ gameTitle, jodi, declarationDate }
 
         let isWinner = false;
         switch (bid.gameType) {
-            case "Single Digit":
-            case "Single Digits":
-                isWinner = bid.answer === winningAnk;
-                break;
-
-            case "SP - SP DP TP":
-            case "DP - SP DP TP":
-            case "TP - SP DP TP":
-            case "Single Pana":
-            case "Double Pana":
-            case "Triple Pana": {
-                const panna = String(jodi);
+            case "Jodi":
                 const answer = String(bid.answer).trim();
-
-                // --- SP Logic (Single Pana style) ---
-                if (bid.gameType.startsWith("SP") || bid.gameType === "Single Pana") {
-                    isWinner = panna.includes(answer);
-                }
-                // --- DP Logic (Double Pana style) ---
-                else if (bid.gameType.startsWith("DP") || bid.gameType === "Double Pana") {
-                    isWinner = panna.includes(answer);
-                }
-                // --- TP Logic (Triple Pana style) ---
-                else if (bid.gameType.startsWith("TP") || bid.gameType === "Triple Pana") {
-                    isWinner = panna === answer;
-                } else {
-                    isWinner = false;
-                }
+                isWinner = jodi.includes(answer);
                 break;
-            }
-
-            case "Odd Even":
-                isWinner =
-                    bid.answer === "Even"
-                        ? parseInt(winningAnk) % 2 === 0
-                        : parseInt(winningAnk) % 2 !== 0;
-                break;
-
             default:
                 isWinner = false;
         }

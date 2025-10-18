@@ -20,7 +20,7 @@ export const getJackpotGameRates = async () => {
         combinedRates[`${keyPrefix}_1`] = data.min_value;
         combinedRates[`${keyPrefix}_2`] = data.max_value;
     });
-
+    console.log(combinedRates)
     return combinedRates;
 };
 
@@ -41,10 +41,7 @@ export const updateJackpotGameRates = async (newRates) => {
 
     // Map the flat form keys to their corresponding Firestore documents and fields
     const rateMappings = [
-        { docId: 'single-digits', label: 'Single Digit', minKey: 'single_digits_1', maxKey: 'single_digits_2' },
-        { docId: 'single-pana', label: 'Single Pana', minKey: 'single_pana_1', maxKey: 'single_pana_2' },
-        { docId: 'double-pana', label: 'Double Pana', minKey: 'double_pana_1', maxKey: 'double_pana_2' },
-        { docId: 'triple-pana', label: 'Triple Pana', minKey: 'triple_pana_1', maxKey: 'triple_pana_2' },
+        { docId: 'jodi', label: 'Jodi', minKey: 'jodi_1', maxKey: 'jodi_2' },
     ];
 
     rateMappings.forEach(mapping => {
