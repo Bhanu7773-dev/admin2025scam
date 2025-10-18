@@ -39,9 +39,6 @@ export const addGame = async ({ id, name, openTime, closeTime }) => {
         id,
         name,
         altName: null,
-        isDisabled: false,
-        // This now correctly handles empty, null, or undefined values.
-        // It will save an empty string if openTime/closeTime is not provided.
         openTime: openTime || '',
         closeTime: closeTime || '',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
