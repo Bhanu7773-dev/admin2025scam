@@ -111,9 +111,11 @@ function normalizePayoutRates(flatRates) {
     const rateMap = {
         "Single Digits": calculateRate('single_digit_1', 'single_digit_2'),
         "Jodi Bulk": calculateRate('jodi_digit_1', 'jodi_digit_2'),
+        "Two Digits Panel": calculateRate('jodi_digit_1', 'jodi_digit_2'),
         "Jodi": calculateRate('jodi_digit_1', 'jodi_digit_2'),
         "Single Pana Bulk": calculateRate('single_pana_1', 'single_pana_2'),
         "Double Pana Bulk": calculateRate('single_pana_1', 'single_pana_2'),
+        "Panel Group": calculateRate('single_pana_1', 'single_pana_2'),
         "Single Pana": calculateRate('single_pana_1', 'single_pana_2'),
         "Single Pana": calculateRate('single_pana_1', 'single_pana_2'),
         "Double Pana": calculateRate('double_pana_1', 'double_pana_2'),
@@ -145,6 +147,7 @@ function checkIfWinner(submission, dailyResult) {
             isWinner = String(digit) === answer;
             break;
         case "Jodi Bulk":
+        case "Two Digits Panel":
         case "Jodi":
             isWinner = dailyResult.jodi === answer;
             break;
@@ -358,7 +361,7 @@ export const processGameResults = async ({ startDate, endDate, overrideList = nu
                     summary.skipped++;
                     continue;
                 }
-                
+
                 const isWinner = checkIfWinner(submission, dailyResult);
                 const submissionRef = db.collection("game_submissions").doc(submission.id);
 
@@ -457,7 +460,7 @@ export const getPrediction = async ({ gameId, date, type, openPana, closePana })
         if (type && marketType !== type) {
             continue;
         }
-        
+
         const isWinner = checkIfWinner(submission, dailyResult);
 
         if (isWinner) {
