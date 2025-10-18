@@ -206,7 +206,7 @@ export const updateGameRates = async (newRates) => {
 
     // Map the flat form keys to their corresponding Firestore documents and fields
     const rateMappings = [
-        { docId: 'single-digit', label: 'Single Digit', minKey: 'single_digit_1', maxKey: 'single_digit_2' },
+        { docId: 'single-digits', label: 'Single Digits', minKey: 'single_digits_1', maxKey: 'single_digits_2' },
         { docId: 'jodi-digit', label: 'Jodi Digit', minKey: 'jodi_digit_1', maxKey: 'jodi_digit_2' },
         { docId: 'single-pana', label: 'Single Pana', minKey: 'single_pana_1', maxKey: 'single_pana_2' },
         { docId: 'double-pana', label: 'Double Pana', minKey: 'double_pana_1', maxKey: 'double_pana_2' },

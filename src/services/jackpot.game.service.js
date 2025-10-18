@@ -8,7 +8,7 @@ const FUNDS_COLLECTION = "funds";
 const FUNDS_TRANSACTIONS_COLLECTION = "funds_transactions";
 
 /**
- * Calculates the single-digit "Ank" from a 3-digit "Panna" string.
+ * Calculates the single-digits "Ank" from a 3-digit "Panna" string.
  */
 const _sumDigits = (pannaStr) => {
     if (!pannaStr || pannaStr.length !== 3) return '';
