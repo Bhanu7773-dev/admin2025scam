@@ -118,7 +118,7 @@ export const declareStarlineResult = async ({ gameId, gameTitle, openingPanna, d
         }
 
         if (isWinner) {
-            const baseKey = bid.gameType.toLowerCase().replace(/\s+/g, '_');
+            let baseKey = bid.gameType.toLowerCase().replace(/\s+/g, '_');
 
             if (bid.gameType.startsWith("SP")) {
                 baseKey = "single_pana";
