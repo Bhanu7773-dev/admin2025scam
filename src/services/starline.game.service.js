@@ -70,6 +70,9 @@ export const declareStarlineResult = async ({ gameId, gameTitle, openingPanna, d
             case "SP - SP DP TP":
             case "DP - SP DP TP":
             case "TP - SP DP TP":
+            case "SP Motor":
+            case "DP Motor":
+            case "TP Motor":
             case "Single Pana":
             case "Double Pana":
             case "Triple Pana": {
