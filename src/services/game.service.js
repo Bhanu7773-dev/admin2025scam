@@ -364,27 +364,40 @@ export const processGameResults = async ({ startDate, endDate, overrideList = nu
 
                 if (isWinner) {
                     summary.won++;
+
                     const payoutRate = dynamicPayoutRates[submission.gameType] || dynamicPayoutRates['default'];
                     const winnings = submission.bidAmount * payoutRate;
+
                     const fundsQuery = db.collection("funds").where("uid", "==", submission.uid).limit(1);
                     const fundsSnapshot = await fundsQuery.get();
+
                     if (!fundsSnapshot.empty) {
-                        const fundDocRef = fundsSnapshot.docs[0].ref;
+                        const fundDoc = fundsSnapshot.docs[0];
+                        const fundDocRef = fundDoc.ref;
+
+                        const balanceBefore = fundDoc.data().balance || 0;
+                        const balanceAfter = balanceBefore + winnings;
+
                         batch.update(submissionRef, { status: "won", winAmount: winnings });
+
                         batch.update(fundDocRef, {
-                            balance: admin.firestore.FieldValue.increment(winnings),
+                            balance: balanceAfter,
                             updatedAt: Timestamp.now(),
                             lastSyncAt: Timestamp.now(),
                             lastUpdateReason: `Game Won - ${submission.gameType}`
                         });
+
                         const transactionRef = db.collection(FUNDS_TRANSACTIONS_COLLECTION).doc();
                         batch.set(transactionRef, {
                             uid: submission.uid,
                             amount: winnings,
                             type: 'credit',
                             reason: `Game Win: ${submission.gameType} on ${submission.title || gameId}`,
+                            balanceBefore,
+                            balanceAfter,
                             timestamp: admin.firestore.FieldValue.serverTimestamp(),
                         });
+
                         const user = userCache.get(submission.uid) || { username: 'N/A' };
                         winnersList.push({
                             submissionId: submission.id,
@@ -393,6 +406,7 @@ export const processGameResults = async ({ startDate, endDate, overrideList = nu
                             gameType: submission.gameType,
                             winAmount: winnings
                         });
+
                     } else {
                         console.error(`CRITICAL: Fund document not found for user ${submission.uid}.`);
                     }
@@ -400,6 +414,7 @@ export const processGameResults = async ({ startDate, endDate, overrideList = nu
                     summary.lost++;
                     batch.update(submissionRef, { status: "lost" });
                 }
+
                 summary.processed++;
             }
         }
