@@ -440,6 +440,7 @@ export const getPrediction = async ({ gameId, date, type, openPana, closePana })
         const { gameType, answer, bidAmount } = submission;
 
         switch (gameType) {
+            case "Single Digit":
             case "Single Digits": const digit = marketType === 'open' ? sumDigits(dailyResult.openingPanna) : sumDigits(dailyResult.closingPanna); isWinner = String(digit) === answer; break;
             case "Jodi": isWinner = dailyResult.jodi === answer; break;
             case "Single Pana": case "Double Pana": case "Triple Pana": case "SP Motor": case "DP Motor": if (marketType === 'open') { isWinner = gameType === 'Double Pana' ? dailyResult.openingPanna == reverseString(answer) : dailyResult.openingPanna.includes(answer); } else { isWinner = gameType === 'Double Pana' ? dailyResult.closingPanna == reverseString(answer) : dailyResult.closingPanna.includes(answer); } break;
