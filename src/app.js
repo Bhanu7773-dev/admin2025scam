@@ -17,6 +17,7 @@ import { verifyFirebaseIdToken } from './plugins/firebaseAuth.js';
 import gamesRoutes from "./routes/games.routes.js";
 import starlineGameController from "./routes/starline.games.routes.js";
 import jackpotGameController from "./routes/jackpot.games.routes.js";
+import * as gameService from "./services/game.service.js"
 
 const app = Fastify({ logger: false });
 
@@ -64,6 +65,24 @@ app.register(settingsRoutes, { prefix: "/settings" });
 
 // V V V NEWLY ADDED ROUTE V V V
 app.register(gameRatesRoutes, { prefix: "/game-rates" });
+app.get("/game-results", async (req, reply) => {
+  try {
+    // 1. Extract the optional 'date' from the query string (e.g., /game-results?date=2025-10-18)
+    const { date } = req.query;
+
+    // 2. Call the service function, passing the date filter if it exists.
+    // The getResults function is already designed to handle cases where 'date' is undefined.
+    const results = await gameService.getResults({ date });
+
+    // 3. Send the successful response, wrapping the data in an object as the frontend expects.
+    return reply.send({ data: results });
+    
+  } catch (error) {
+    // 4. If anything goes wrong, log the error and send a generic 500 server error response.
+    console.error("Error fetching game results:", error);
+    return reply.code(500).send({ error: "An internal server error occurred." });
+  }
+});
 
 app.register(starlineGameRatesRoutes, { prefix: "/starline-game-rates" });
 app.register(jackpotGameRatesRoutes, { prefix: "/jackpot-game-rates" });

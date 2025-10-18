@@ -100,15 +100,15 @@ export async function revertBidsHandler(request, reply) {
  */
 export async function getPredictionHandler(request, reply) {
     try {
-        const { gameId, date, type, openPanna, closePanna } = request.body;
-        if (!gameId || !date || !openPanna || !closePanna) {
-            return reply.code(400).send({ error: "Required fields are missing. 'gameId', 'date', 'openPanna', and 'closePanna' are mandatory." });
+        const { gameId, date, type, openPana, closePana } = request.body;
+        if (!gameId || !date || !openPana || !closePana) {
+            return reply.code(400).send({ error: "Required fields are missing. 'gameId', 'date', 'openPana', and 'closePana' are mandatory." });
         }
         const predictionDate = new Date(date);
         if (isNaN(predictionDate.getTime())) {
             return reply.code(400).send({ error: "Invalid 'date' format. Please use a valid date string like YYYY-MM-DD." });
         }
-        const winners = await getPrediction({ gameId, date: predictionDate, type: type || null, openPanna, closePanna });
+        const winners = await getPrediction({ gameId, date: predictionDate, type: type || null, openPana, closePana });
         return reply.send({ data: winners });
     } catch (error) {
         console.error("Error in getPredictionHandler:", error);
