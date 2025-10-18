@@ -190,6 +190,9 @@ function checkIfWinner(submission, dailyResult) {
             const isOdd = ankForOddEven % 2 !== 0;
             isWinner = (String(answer).toLowerCase() === 'odd' && isOdd) || (String(answer).toLowerCase() === 'even' && !isOdd);
             break;
+        case 'Panel Group':
+            isWinner = answer === dailyResult.openingPanna || answer === dailyResult.closingPana
+            break;
     }
     return isWinner;
 }
