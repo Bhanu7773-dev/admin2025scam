@@ -95,10 +95,12 @@ export const declareStarlineResult = async ({ gameId, gameTitle, openingPanna, d
             }
 
             case "Odd Even":
+                // const panna = String(openingPanna);
+                const answer = String(bid.answer).trim();
                 isWinner =
                     bid.answer === "Even"
-                        ? parseInt(winningAnk) % 2 === 0
-                        : parseInt(winningAnk) % 2 !== 0;
+                        ? parseInt(answer) % 2 === 0
+                        : parseInt(answer) % 2 !== 0;
                 break;
 
             default:
