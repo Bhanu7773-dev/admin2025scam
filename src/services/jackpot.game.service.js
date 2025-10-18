@@ -23,7 +23,7 @@ export const declareJackpotResult = async ({ gameId, gameTitle, jodi, declaratio
     if (!gameId || !gameTitle || !jodi || !declarationDate) {
         throw new Error("Missing required fields: gameId, gameTitle, jodi, and declarationDate.");
     }
-    if (!/^\d{3}$/.test(jodi)) {
+    if (!/^\d{2}$/.test(jodi)) {
         throw new Error("Invalid format for jodi. It must be a 3-digit string.");
     }
 
@@ -254,8 +254,8 @@ export const predictJackpotWinners = async ({ gameTitle, jodi, declarationDate }
     if (!gameTitle || !jodi || !declarationDate) {
         throw new Error("Missing required fields: gameTitle, jodi, and declarationDate are required.");
     }
-    if (!/^\d{3}$/.test(jodi)) {
-        throw new Error("Invalid format for jodi. It must be a 3-digit string.");
+    if (!/^\d{2}$/.test(jodi)) {
+        throw new Error("Invalid format for jodi. It must be a 2-digit string.");
     }
 
     const startDate = new Date(declarationDate);
