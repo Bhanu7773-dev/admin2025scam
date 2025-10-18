@@ -134,7 +134,7 @@ function normalizePayoutRates(flatRates) {
 }
 
 // --- CENTRALIZED WINNER CHECK LOGIC ---
-function checkIfWinner(submission, dailyResult) {
+function checkIfWinner(submission, dailyResult, type) {
     const { gameType, answer, selectedGameType } = submission;
     const marketType = String(selectedGameType).toLowerCase();
     let isWinner = false;
@@ -167,9 +167,6 @@ function checkIfWinner(submission, dailyResult) {
         case "TP Motor":
             const motorPanna = marketType === 'open' ? dailyResult.openingPanna : dailyResult.closingPana;
             isWinner = String(motorPanna).includes(answer);
-            break;
-        case 'Two Digits Panel':
-            isWinner = `${sumDigits(dailyResult.openingPanna)}${sumDigits(dailyResult.closingPana)}` === answer;
             break;
         case 'Group Jodi':
         case 'Red Bracket':
@@ -457,11 +454,12 @@ export const getPrediction = async ({ gameId, date, type, openPana, closePana })
     for (const doc of submissionsSnapshot.docs) {
         const submission = { id: doc.id, ...doc.data() };
         const marketType = String(submission.selectedGameType).toLowerCase();
-        if (type && marketType !== type) {
-            continue;
-        }
 
-        const isWinner = checkIfWinner(submission, dailyResult);
+        // if (type && marketType !== type) {
+        //     continue;
+        // }
+
+        const isWinner = checkIfWinner(submission, dailyResult, type);
 
         if (isWinner) {
             const payoutRate = dynamicPayoutRates[submission.gameType] || dynamicPayoutRates['default'];
