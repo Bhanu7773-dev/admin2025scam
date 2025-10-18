@@ -110,10 +110,10 @@ function normalizePayoutRates(flatRates) {
     };
     const rateMap = {
         "Single Digits": calculateRate('single_digit_1', 'single_digit_2'),
+        "Jodi Bulk": calculateRate('jodi_digit_1', 'jodi_digit_2'),
         "Jodi": calculateRate('jodi_digit_1', 'jodi_digit_2'),
         "Single Pana Bulk": calculateRate('single_pana_1', 'single_pana_2'),
         "Double Pana Bulk": calculateRate('single_pana_1', 'single_pana_2'),
-        "Triple Pana Bulk": calculateRate('single_pana_1', 'single_pana_2'),
         "Single Pana": calculateRate('single_pana_1', 'single_pana_2'),
         "Single Pana": calculateRate('single_pana_1', 'single_pana_2'),
         "Double Pana": calculateRate('double_pana_1', 'double_pana_2'),
@@ -144,6 +144,7 @@ function checkIfWinner(submission, dailyResult) {
             const digit = marketType === 'open' ? sumDigits(dailyResult.openingPanna) : sumDigits(dailyResult.closingPana);
             isWinner = String(digit) === answer;
             break;
+        case "Jodi Bulk":
         case "Jodi":
             isWinner = dailyResult.jodi === answer;
             break;
@@ -152,7 +153,6 @@ function checkIfWinner(submission, dailyResult) {
         case "Triple Pana":
         case "Single Pana Bulk":
         case "Double Pana Bulk":
-        case "Triple Pana Bulk":
         case "SP - SP DP TP":
         case "DP - SP DP TP":
         case "TP - SP DP TP":
