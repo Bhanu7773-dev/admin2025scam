@@ -220,6 +220,8 @@ export const processGameResults = async ({ startDate, endDate, overrideList = nu
             .where("status", "==", "pending")
             .where("createdAt", ">=", startDate)
             .where("createdAt", "<=", endDate)
+            .where("isStarline", "==", false)
+            .where("isJackpot", "==", false)
             .get();
 
         if (pendingSubmissionsSnapshot.empty) {
@@ -404,6 +406,8 @@ export const getPrediction = async ({ gameId, date, type, openPana, closePana })
         .where("gameId", "==", gameId)
         .where("createdAt", ">=", startDate)
         .where("createdAt", "<=", endDate)
+        .where("isStarline", "==", false)
+        .where("isJackpot", "==", false)
         .get();
 
     if (submissionsSnapshot.empty) {
