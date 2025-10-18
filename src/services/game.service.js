@@ -6,6 +6,7 @@ import { getGameRates } from "./settings.service.js";
 const GAME_RESULTS_COLLECTION = "game-results";
 const FUNDS_TRANSACTIONS_COLLECTION = "funds_transactions";
 
+// --- SERVICE FOR WEB SCRAPING ---
 class MatkaService {
     static baseUrl = "https://sattamatkano1.me";
 
@@ -13,12 +14,10 @@ class MatkaService {
         try {
             const response = await fetch(MatkaService.baseUrl + endpoint);
             if (!response.ok) {
-                console.error(`Request failed with status: ${response.status}`);
                 return null;
             }
             return await response.text();
         } catch (err) {
-            console.error("An error occurred during the GET request:", err);
             return null;
         }
     }
@@ -26,34 +25,25 @@ class MatkaService {
     async getChart(id) {
         const html = await this.get(`/${id}.php`);
         if (!html) return [];
-
         const $ = cheerio.load(html);
         const rows = $("tbody tr").slice(1);
-
         const weeklyResults = [];
         const days = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
-
         rows.each((_, row) => {
             const cells = $(row).children();
             if (cells.length < 1) return;
-
             const dateRange = $(cells[0]).text().trim().replace(/\s+/g, " ");
             const dailyResultsForWeek = [];
-
             for (let i = 0; i < 7; i++) {
                 const dayStartIndex = 1 + i * 3;
                 if (dayStartIndex + 2 >= cells.length) continue;
-
                 const openingPannaCell = $(cells[dayStartIndex]);
                 const jodiCell = $(cells[dayStartIndex + 1]);
                 const closingPannaCell = $(cells[dayStartIndex + 2]);
-
                 const openingPanna = openingPannaCell.text().trim().replace(/\s+/g, "");
                 const jodi = jodiCell.text().trim();
                 const closingPanna = closingPannaCell.text().trim().replace(/\s+/g, "");
-
                 const isHoliday = (jodiCell.html()?.includes('color="red"') ?? false) && isNaN(parseInt(jodi));
-
                 dailyResultsForWeek.push({
                     dayOfWeek: days[i],
                     isClosed: isHoliday,
@@ -62,18 +52,15 @@ class MatkaService {
                     closingPanna: isHoliday ? "***" : closingPanna,
                 });
             }
-
-            weeklyResults.push({
-                dateRange,
-                results: dailyResultsForWeek,
-            });
+            weeklyResults.push({ dateRange, results: dailyResultsForWeek });
         });
-
         return weeklyResults;
     }
 }
 
 const matka = new MatkaService();
+
+// --- HELPER FUNCTIONS & CONSTANTS ---
 const families = { "12": ["12", "17", "21", "26", "62", "67", "71", "76"], "13": ["13", "18", "31", "36", "63", "68", "81", "86"], "14": ["14", "19", "41", "46", "64", "69", "91", "96"], "15": ["01", "06", "10", "15", "51", "56", "60", "65"], "23": ["23", "28", "32", "37", "73", "78", "82", "87"], "24": ["24", "29", "42", "47", "74", "79", "92", "97"], "25": ["02", "07", "20", "25", "52", "57", "70", "75"], "34": ["34", "39", "43", "48", "84", "89", "93", "98"], "35": ["03", "08", "30", "35", "53", "58", "80", "85"], "45": ["04", "09", "40", "45", "54", "59", "90", "95"] };
 const familiesRed = { half_red: ["05", "16", "27", "38", "49", "50", "61", "72", "83", "94"], full_red: ["00", "11", "22", "33", "44", "55", "66", "77", "88", "99"] };
 
@@ -105,7 +92,6 @@ const isResultDeclared = (result, marketType) => {
 };
 const sumDigits = (numStr) => String(numStr).split('').reduce((sum, digit) => sum + parseInt(digit, 10), 0) % 10;
 const parseSangamData = (str) => str.split(",").reduce((acc, part) => { const [key, value] = part.split(":").map(s => s.trim()); if (key && value) { acc[key] = value; } return acc; }, {});
-const reverseString = (str) => str.split('').reverse().join('');
 const findFamily = (numStr) => { for (const [, values] of Object.entries(families)) { if (values.includes(numStr)) return values; } return null; };
 const findRedFamily = (numStr) => { for (const [, values] of Object.entries(familiesRed)) { if (values.includes(numStr)) return values; } return null; };
 const parseOverrideResult = (resultStr) => {
@@ -120,12 +106,15 @@ function normalizePayoutRates(flatRates) {
         if (betAmount && betAmount > 0 && winAmount) {
             return winAmount / betAmount;
         }
-        console.warn(`Invalid rate calculation for keys ${betKey}, ${winKey}. Defaulting to 1.`);
         return 1;
     };
     const rateMap = {
         "Single Digits": calculateRate('single_digit_1', 'single_digit_2'),
         "Jodi": calculateRate('jodi_digit_1', 'jodi_digit_2'),
+        "Single Pana Bulk": calculateRate('single_pana_1', 'single_pana_2'),
+        "Double Pana Bulk": calculateRate('single_pana_1', 'single_pana_2'),
+        "Triple Pana Bulk": calculateRate('single_pana_1', 'single_pana_2'),
+        "Single Pana": calculateRate('single_pana_1', 'single_pana_2'),
         "Single Pana": calculateRate('single_pana_1', 'single_pana_2'),
         "Double Pana": calculateRate('double_pana_1', 'double_pana_2'),
         "Triple Pana": calculateRate('triple_pana_1', 'triple_pana_2'),
@@ -142,6 +131,72 @@ function normalizePayoutRates(flatRates) {
     return Object.fromEntries(Object.entries(rateMap).filter(([, value]) => value !== undefined));
 }
 
+// --- CENTRALIZED WINNER CHECK LOGIC ---
+function checkIfWinner(submission, dailyResult) {
+    const { gameType, answer, selectedGameType } = submission;
+    const marketType = String(selectedGameType).toLowerCase();
+    let isWinner = false;
+
+    switch (gameType) {
+        case "Single Digit":
+        case "Single Digits":
+        case "Single Digits Bulk":
+            const digit = marketType === 'open' ? sumDigits(dailyResult.openingPanna) : sumDigits(dailyResult.closingPana);
+            isWinner = String(digit) === answer;
+            break;
+        case "Jodi":
+            isWinner = dailyResult.jodi === answer;
+            break;
+        case "Single Pana":
+        case "Double Pana":
+        case "Triple Pana":
+        case "Single Pana Bulk":
+        case "Double Pana Bulk":
+        case "Triple Pana Bulk":
+        case "SP - SP DP TP":
+        case "DP - SP DP TP":
+        case "TP - SP DP TP":
+            const pannaToMatch = marketType === 'open' ? dailyResult.openingPanna : dailyResult.closingPana;
+            isWinner = pannaToMatch === answer;
+            break;
+        case "SP Motor":
+        case "DP Motor":
+        case "TP Motor":
+            const motorPanna = marketType === 'open' ? dailyResult.openingPanna : dailyResult.closingPana;
+            isWinner = String(motorPanna).includes(answer);
+            break;
+        case 'Two Digits Panel':
+            isWinner = `${sumDigits(dailyResult.openingPanna)}${sumDigits(dailyResult.closingPana)}` === answer;
+            break;
+        case 'Group Jodi':
+        case 'Red Bracket':
+            const family = gameType === 'Group Jodi' ? findFamily(answer) : findRedFamily(answer);
+            isWinner = family?.includes(dailyResult.jodi) ?? false;
+            break;
+        case 'Half Sangam A':
+            const sangamAData = parseSangamData(answer);
+            isWinner = sangamAData['Pana'] === dailyResult.openingPanna && sangamAData['Ank'] === String(sumDigits(dailyResult.closingPana));
+            break;
+        case 'Half Sangam B':
+            const sangamBData = parseSangamData(answer);
+            isWinner = sangamBData['Pana'] === dailyResult.closingPana && sangamBData['Ank'] === String(sumDigits(dailyResult.openingPanna));
+            break;
+        case 'Full Sangam':
+            const sangamData = parseSangamData(answer);
+            isWinner = sangamData['Open'] === dailyResult.openingPanna && sangamData['Close'] === dailyResult.closingPana;
+            break;
+        case 'Odd Even':
+            const ankForOddEven = marketType === 'open' ? sumDigits(dailyResult.openingPanna) : sumDigits(dailyResult.closingPana);
+            const isOdd = ankForOddEven % 2 !== 0;
+            isWinner = (String(answer).toLowerCase() === 'odd' && isOdd) || (String(answer).toLowerCase() === 'even' && !isOdd);
+            break;
+    }
+    return isWinner;
+}
+
+
+// --- MAIN HANDLERS & EXPORTS ---
+
 export async function declareResultHandler(request, reply) {
     try {
         const db = admin.firestore();
@@ -149,12 +204,10 @@ export async function declareResultHandler(request, reply) {
         if (!gameId || !date || !openPana || !closePana) {
             return reply.code(400).send({ error: "Required fields are missing." });
         }
-
         const resultDate = new Date(date);
         if (isNaN(resultDate.getTime())) {
             return reply.code(400).send({ error: "Invalid 'date' format." });
         }
-
         const gameDoc = await db.collection("games").doc(gameId).get();
         if (!gameDoc.exists) {
             throw new Error(`Game with ID '${gameId}' not found.`);
@@ -162,7 +215,6 @@ export async function declareResultHandler(request, reply) {
         const gameTitle = gameDoc.data().name || gameId;
         const jodi = `${sumDigits(openPana)}${sumDigits(closePana)}`;
         const docId = `${date}_${gameId}`;
-
         const resultDocRef = db.collection(GAME_RESULTS_COLLECTION).doc(docId);
         await resultDocRef.set({
             gameId,
@@ -173,47 +225,55 @@ export async function declareResultHandler(request, reply) {
             jodi,
             lastUpdated: admin.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
-        console.log(`Successfully saved result for ${gameTitle} on ${date}.`);
-
         const startDate = new Date(resultDate);
         startDate.setHours(0, 0, 0, 0);
         const endDate = new Date(resultDate);
         endDate.setHours(23, 59, 59, 999);
-
         const overrideList = {
             [gameId]: {
                 firstHalf: `${sumDigits(openPana)}-${openPana}`,
                 secondHalf: `${sumDigits(closePana)}-${closePana}`,
             }
         };
-
         const result = await processGameResults({
             startDate,
             endDate,
             overrideList
         });
-
         return reply.send({ success: true, message: "Result declared and bids processed.", data: result });
-
     } catch (error) {
         console.error("Error in declareResultHandler:", error);
         return reply.code(500).send({ error: error.message || "An internal server error occurred." });
     }
 }
 
+export const getResults = async ({ date } = {}) => {
+    try {
+        const db = admin.firestore();
+        let query = db.collection(GAME_RESULTS_COLLECTION).orderBy("lastUpdated", "desc");
+        if (date) {
+            query = query.where("declarationDate", "==", date);
+        }
+        const snapshot = await query.get();
+        if (snapshot.empty) {
+            return [];
+        }
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    } catch (error) {
+        console.error("Error fetching game results:", error);
+        throw new Error("Failed to fetch game results from the database.");
+    }
+};
+
 export const processGameResults = async ({ startDate, endDate, overrideList = null }) => {
-    console.log(`Starting game result processing for ${startDate.toISOString()} to ${endDate.toISOString()}`);
     const flatGameRates = await getGameRates();
     const dynamicPayoutRates = normalizePayoutRates(flatGameRates);
-
     if (Object.keys(dynamicPayoutRates).length <= 1) {
         throw new Error("Game rates are not configured.");
     }
-
     const summary = { totalSubmissions: 0, processed: 0, won: 0, lost: 0, skipped: 0 };
     const winnersList = [];
     const db = admin.firestore();
-
     try {
         const batch = db.batch();
         const pendingSubmissionsSnapshot = await db.collection("game_submissions")
@@ -223,26 +283,21 @@ export const processGameResults = async ({ startDate, endDate, overrideList = nu
             .where("isStarline", "==", false)
             .where("isJackpot", "==", false)
             .get();
-
         if (pendingSubmissionsSnapshot.empty) {
-            console.log("No pending submissions found.");
             return { ...summary, winners: [] };
         }
-
         const allUids = new Set(pendingSubmissionsSnapshot.docs.map(doc => doc.data().uid));
         const userCache = new Map();
         const userDocs = await Promise.all([...allUids].map(uid => db.collection("users").doc(uid).get()));
         userDocs.forEach(doc => {
             if (doc.exists) userCache.set(doc.id, doc.data());
         });
-
         let submissionsByGame = new Map();
         pendingSubmissionsSnapshot.forEach(doc => {
             const submission = { id: doc.id, ...doc.data() };
             const gameId = submission.gameId;
             submissionsByGame.set(gameId, [...(submissionsByGame.get(gameId) || []), submission]);
         });
-
         const useOverride = overrideList && Object.keys(overrideList).length > 0;
         if (useOverride) {
             const filteredGames = new Map();
@@ -253,13 +308,10 @@ export const processGameResults = async ({ startDate, endDate, overrideList = nu
             }
             submissionsByGame = filteredGames;
         }
-
         const chartCache = new Map();
-
         for (const [gameId, submissions] of submissionsByGame.entries()) {
             let dailyResult = null;
             let isOverriding = useOverride && overrideList[gameId];
-
             if (isOverriding) {
                 const overrideData = overrideList[gameId];
                 const firstHalf = parseOverrideResult(overrideData.firstHalf);
@@ -280,7 +332,6 @@ export const processGameResults = async ({ startDate, endDate, overrideList = nu
                     chartCache.set(gameId, chartData);
                 }
             }
-
             for (const submission of submissions) {
                 if (!isOverriding) {
                     const submissionDate = submission.createdAt.toDate();
@@ -290,66 +341,30 @@ export const processGameResults = async ({ startDate, endDate, overrideList = nu
                         summary.skipped++;
                         continue;
                     }
+                    // IMPORTANT FIX: Recalculate Jodi to ensure consistency
+                    if (dailyResult.openingPanna !== '***' && dailyResult.closingPanna !== '***') {
+                        dailyResult.jodi = `${sumDigits(dailyResult.openingPanna)}${sumDigits(dailyResult.closingPanna)}`;
+                    }
                 }
-
                 if (!dailyResult) {
                     summary.skipped++;
                     continue;
                 }
-
                 const marketType = String(submission.selectedGameType).toLowerCase();
                 if (!isResultDeclared(dailyResult, marketType)) {
                     summary.skipped++;
                     continue;
                 }
-
-                let isWinner = false;
-                const { gameType, answer, uid, bidAmount } = submission;
-                const overrideData = isOverriding ? overrideList[gameId] : null;
-                const checkLoss = (dependsOn) => {
-                    if (!isOverriding) return false;
-                    if (dependsOn.includes('first') && overrideData.firstHalf === null) return true;
-                    if (dependsOn.includes('second') && overrideData.secondHalf === null) return true;
-                    if (dependsOn.includes('both') && (overrideData.firstHalf === null || overrideData.secondHalf === null)) return true;
-                    return false;
-                };
-
-                switch (gameType) {
-                    case "Single Digit":
-                    case "Single Digits Bulk":
-                    case "Single Digits": const digit = marketType === 'open' ? sumDigits(dailyResult.openPana) : sumDigits(dailyResult.closePana); isWinner = String(digit) === answer; break;
-                    case "Jodi": isWinner = dailyResult.jodi === answer; break;
-                    case "Single Pana Bulk":
-                    case "Double Pana Bulk":
-                    case "Triple Pana Bulk":
-                    case "Single Pana":
-                    case "Double Pana":
-                    case "Triple Pana":
-                    case "SP Motor":
-                    case "DP Motor":
-                    case "TP Motor":
-                        if (marketType == 'open') {
-                            isWinner = String(dailyResult.openPana).includes(answer)
-                        } else if (marketType == 'close') {
-                            isWinner = String(dailyResult.closePana).includes(answer)
-                        }
-                        break;
-                    case 'Two Digits Panel': isWinner = `${sumDigits(dailyResult.openPana)}${sumDigits(dailyResult.closingPanna)}` == answer; break;
-                    case 'Group Jodi': case 'Red Bracket': const family = gameType === 'Group Jodi' ? findFamily(answer) : findRedFamily(answer); isWinner = family?.includes(dailyResult.jodi) ?? false; break;
-                    case 'Half Sangam A': const sangamAData = parseSangamData(answer); isWinner = sangamAData['Pana'] === dailyResult.openPana && sangamAData['Ank'] === String(sumDigits(dailyResult.closingPanna)); break;
-                    case 'Half Sangam B': const sangamBData = parseSangamData(answer); isWinner = sangamBData['Pana'] === dailyResult.closingPanna && sangamBData['Ank'] === String(sumDigits(dailyResult.openPana)); break;
-                    case 'Full Sangam': const sangamData = parseSangamData(answer); isWinner = sangamData['Open'] === dailyResult.openPana && sangamData['Close'] === dailyResult.closingPanna; break;
-                    case 'Odd Even': const ankForOddEven = marketType === 'open' ? sumDigits(dailyResult.openPana) : sumDigits(dailyResult.closingPanna); const isOdd = ankForOddEven % 2 !== 0; isWinner = (String(answer).toLowerCase() === 'odd' && isOdd) || (String(answer).toLowerCase() === 'even' && !isOdd); break;
-                }
-
+                
+                const isWinner = checkIfWinner(submission, dailyResult);
                 const submissionRef = db.collection("game_submissions").doc(submission.id);
+
                 if (isWinner) {
                     summary.won++;
-                    const payoutRate = dynamicPayoutRates[gameType] || dynamicPayoutRates['default'];
-                    const winnings = bidAmount * payoutRate;
-                    const fundsQuery = db.collection("funds").where("uid", "==", uid).limit(1);
+                    const payoutRate = dynamicPayoutRates[submission.gameType] || dynamicPayoutRates['default'];
+                    const winnings = submission.bidAmount * payoutRate;
+                    const fundsQuery = db.collection("funds").where("uid", "==", submission.uid).limit(1);
                     const fundsSnapshot = await fundsQuery.get();
-
                     if (!fundsSnapshot.empty) {
                         const fundDocRef = fundsSnapshot.docs[0].ref;
                         batch.update(submissionRef, { status: "won", winAmount: winnings });
@@ -357,29 +372,26 @@ export const processGameResults = async ({ startDate, endDate, overrideList = nu
                             balance: admin.firestore.FieldValue.increment(winnings),
                             updatedAt: Timestamp.now(),
                             lastSyncAt: Timestamp.now(),
-                            lastUpdateReason: `Game Won - ${gameType}`
+                            lastUpdateReason: `Game Won - ${submission.gameType}`
                         });
-
                         const transactionRef = db.collection(FUNDS_TRANSACTIONS_COLLECTION).doc();
                         batch.set(transactionRef, {
-                            uid: uid,
+                            uid: submission.uid,
                             amount: winnings,
                             type: 'credit',
-                            reason: `Game Win: ${gameType} on ${submission.title || gameId}`,
+                            reason: `Game Win: ${submission.gameType} on ${submission.title || gameId}`,
                             timestamp: admin.firestore.FieldValue.serverTimestamp(),
                         });
-
-                        const user = userCache.get(uid) || { username: 'N/A' };
+                        const user = userCache.get(submission.uid) || { username: 'N/A' };
                         winnersList.push({
                             submissionId: submission.id,
-                            userId: uid,
+                            userId: submission.uid,
                             username: user.username,
-                            gameType: gameType,
+                            gameType: submission.gameType,
                             winAmount: winnings
                         });
-
                     } else {
-                        console.error(`CRITICAL: Fund document not found for user ${uid}.`);
+                        console.error(`CRITICAL: Fund document not found for user ${submission.uid}.`);
                     }
                 } else {
                     summary.lost++;
@@ -388,7 +400,6 @@ export const processGameResults = async ({ startDate, endDate, overrideList = nu
                 summary.processed++;
             }
         }
-
         if (summary.processed > 0) {
             await batch.commit();
         }
@@ -403,20 +414,17 @@ export const getPrediction = async ({ gameId, date, type, openPana, closePana })
     if (!gameId || !date || !openPana || !closePana) {
         throw new Error("Missing required parameters.");
     }
-
     const flatGameRates = await getGameRates();
     const dynamicPayoutRates = normalizePayoutRates(flatGameRates);
     if (Object.keys(dynamicPayoutRates).length <= 1) {
         throw new Error("Game rates are not configured.");
     }
-
     const winners = [];
     const db = admin.firestore();
     const startDate = new Date(date);
     startDate.setHours(0, 0, 0, 0);
     const endDate = new Date(date);
     endDate.setHours(23, 59, 59, 999);
-
     const submissionsSnapshot = await db.collection("game_submissions")
         .where("status", "==", "pending")
         .where("gameId", "==", gameId)
@@ -425,67 +433,33 @@ export const getPrediction = async ({ gameId, date, type, openPana, closePana })
         .where("isStarline", "==", false)
         .where("isJackpot", "==", false)
         .get();
-
     if (submissionsSnapshot.empty) {
         return [];
     }
-
     const allUids = new Set(submissionsSnapshot.docs.map(doc => doc.data().uid));
     const userCache = new Map();
     const userDocs = await Promise.all([...allUids].map(uid => db.collection("users").doc(uid).get()));
     userDocs.forEach(doc => {
         if (doc.exists) userCache.set(doc.id, doc.data());
     });
-
     const dailyResult = {
-        openPana,
-        closePana,
+        openingPanna: openPana,
+        closingPana: closePana,
         jodi: `${sumDigits(openPana)}${sumDigits(closePana)}`,
         isClosed: false,
     };
-
     for (const doc of submissionsSnapshot.docs) {
         const submission = { id: doc.id, ...doc.data() };
         const marketType = String(submission.selectedGameType).toLowerCase();
-
         if (type && marketType !== type) {
             continue;
         }
-
-        let isWinner = false;
-        const { gameType, answer, bidAmount } = submission;
-
-        switch (gameType) {
-            case "Single Digit":
-            case "Single Digits Bulk":
-            case "Single Digits": const digit = marketType === 'open' ? sumDigits(dailyResult.openPana) : sumDigits(dailyResult.closePana); isWinner = String(digit) === answer; break;
-            case "Jodi": isWinner = dailyResult.jodi === answer; break;
-            case "Single Pana Bulk":
-            case "Double Pana Bulk":
-            case "Triple Pana Bulk":
-            case "Single Pana":
-            case "Double Pana":
-            case "Triple Pana":
-            case "SP Motor":
-            case "DP Motor":
-            case "TP Motor":
-                if (marketType == 'open') {
-                    isWinner = String(dailyResult.openPana).includes(answer)
-                } else if (marketType == 'close') {
-                    isWinner = String(dailyResult.closePana).includes(answer)
-                }
-                break;
-            case 'Two Digits Panel': isWinner = `${sumDigits(dailyResult.openPana)}${sumDigits(dailyResult.closingPanna)}` == answer; break;
-            case 'Group Jodi': case 'Red Bracket': const family = gameType === 'Group Jodi' ? findFamily(answer) : findRedFamily(answer); isWinner = family?.includes(dailyResult.jodi) ?? false; break;
-            case 'Half Sangam A': const sangamAData = parseSangamData(answer); isWinner = sangamAData['Pana'] === dailyResult.openPana && sangamAData['Ank'] === String(sumDigits(dailyResult.closingPanna)); break;
-            case 'Half Sangam B': const sangamBData = parseSangamData(answer); isWinner = sangamBData['Pana'] === dailyResult.closingPanna && sangamBData['Ank'] === String(sumDigits(dailyResult.openPana)); break;
-            case 'Full Sangam': const sangamData = parseSangamData(answer); isWinner = sangamData['Open'] === dailyResult.openPana && sangamData['Close'] === dailyResult.closingPanna; break;
-            case 'Odd Even': const ankForOddEven = marketType === 'open' ? sumDigits(dailyResult.openPana) : sumDigits(dailyResult.closingPanna); const isOdd = ankForOddEven % 2 !== 0; isWinner = (String(answer).toLowerCase() === 'odd' && isOdd) || (String(answer).toLowerCase() === 'even' && !isOdd); break;
-        }
+        
+        const isWinner = checkIfWinner(submission, dailyResult);
 
         if (isWinner) {
-            const payoutRate = dynamicPayoutRates[gameType] || dynamicPayoutRates['default'];
-            const winAmount = bidAmount * payoutRate;
+            const payoutRate = dynamicPayoutRates[submission.gameType] || dynamicPayoutRates['default'];
+            const winAmount = submission.bidAmount * payoutRate;
             const user = userCache.get(submission.uid) || { username: 'N/A' };
             winners.push({
                 submissionId: submission.id,
@@ -498,29 +472,5 @@ export const getPrediction = async ({ gameId, date, type, openPana, closePana })
             });
         }
     }
-
     return winners;
-};
-
-/**
- * NEW FUNCTION TO FETCH GAME RESULTS
- */
-export const getResults = async ({ date } = {}) => {
-    try {
-        const db = admin.firestore();
-        let query = db.collection(GAME_RESULTS_COLLECTION).orderBy("lastUpdated", "desc");
-
-        if (date) {
-            query = query.where("declarationDate", "==", date);
-        }
-
-        const snapshot = await query.get();
-        if (snapshot.empty) {
-            return [];
-        }
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    } catch (error) {
-        console.error("Error fetching game results:", error);
-        throw new Error("Failed to fetch game results from the database.");
-    }
 };
