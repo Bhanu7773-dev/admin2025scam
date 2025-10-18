@@ -143,7 +143,7 @@ function checkIfWinner(submission, dailyResult, type) {
         case "Single Digit":
         case "Single Digits":
         case "Single Digits Bulk":
-            const digit = marketType === 'open' ? sumDigits(dailyResult.openingPanna) : sumDigits(dailyResult.closingPana);
+            const digit = marketType === 'open' ? sumDigits(dailyResult.openingPanna) : sumDigits(dailyResult.closingPanna);
             isWinner = String(digit) === answer;
             break;
         case "Jodi Bulk":
@@ -159,13 +159,13 @@ function checkIfWinner(submission, dailyResult, type) {
         case "SP - SP DP TP":
         case "DP - SP DP TP":
         case "TP - SP DP TP":
-            const pannaToMatch = marketType === 'open' ? dailyResult.openingPanna : dailyResult.closingPana;
+            const pannaToMatch = marketType === 'open' ? dailyResult.openingPanna : dailyResult.closingPanna;
             isWinner = pannaToMatch === answer;
             break;
         case "SP Motor":
         case "DP Motor":
         case "TP Motor":
-            const motorPanna = marketType === 'open' ? dailyResult.openingPanna : dailyResult.closingPana;
+            const motorPanna = marketType === 'open' ? dailyResult.openingPanna : dailyResult.closingPanna;
             isWinner = String(motorPanna).includes(answer);
             break;
         case 'Group Jodi':
@@ -175,23 +175,23 @@ function checkIfWinner(submission, dailyResult, type) {
             break;
         case 'Half Sangam A':
             const sangamAData = parseSangamData(answer);
-            isWinner = sangamAData['Pana'] === dailyResult.openingPanna && sangamAData['Ank'] === String(sumDigits(dailyResult.closingPana));
+            isWinner = sangamAData['Pana'] === dailyResult.openingPanna && sangamAData['Ank'] === String(sumDigits(dailyResult.closingPanna));
             break;
         case 'Half Sangam B':
             const sangamBData = parseSangamData(answer);
-            isWinner = sangamBData['Pana'] === dailyResult.closingPana && sangamBData['Ank'] === String(sumDigits(dailyResult.openingPanna));
+            isWinner = sangamBData['Pana'] === dailyResult.closingPanna && sangamBData['Ank'] === String(sumDigits(dailyResult.openingPanna));
             break;
         case 'Full Sangam':
             const sangamData = parseSangamData(answer);
-            isWinner = sangamData['Open'] === dailyResult.openingPanna && sangamData['Close'] === dailyResult.closingPana;
+            isWinner = sangamData['Open'] === dailyResult.openingPanna && sangamData['Close'] === dailyResult.closingPanna;
             break;
         case 'Odd Even':
-            const ankForOddEven = marketType === 'open' ? sumDigits(dailyResult.openingPanna) : sumDigits(dailyResult.closingPana);
+            const ankForOddEven = marketType === 'open' ? sumDigits(dailyResult.openingPanna) : sumDigits(dailyResult.closingPanna);
             const isOdd = ankForOddEven % 2 !== 0;
             isWinner = (String(answer).toLowerCase() === 'odd' && isOdd) || (String(answer).toLowerCase() === 'even' && !isOdd);
             break;
         case 'Panel Group':
-            isWinner = answer === dailyResult.openingPanna || answer === dailyResult.closingPana
+            isWinner = answer === dailyResult.openingPanna || answer === dailyResult.closingPanna
             break;
     }
     return isWinner;
