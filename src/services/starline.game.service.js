@@ -93,15 +93,25 @@ export const declareStarlineResult = async ({ gameId, gameTitle, openingPanna, d
                 }
                 break;
             }
+            case "Odd Even": {
+                const winningNum = parseInt(String(openingPanna)); 
+                const answer = String(bid.answer).trim().toLowerCase();
 
-            case "Odd Even":
-                // const panna = String(openingPanna);
-                const answer = String(bid.answer).trim();
-                isWinner =
-                    bid.answer === "Even"
-                        ? parseInt(answer) % 2 === 0
-                        : parseInt(answer) % 2 !== 0;
+                if (isNaN(winningNum)) {
+                    isWinner = false;
+                    break;
+                }
+
+                if (answer === "even") {
+                    isWinner = winningNum % 2 === 0;
+                } else if (answer === "odd") {
+                    isWinner = winningNum % 2 !== 0;
+                } else {
+                    isWinner = false; // invalid answer
+                }
                 break;
+            }
+
 
             default:
                 isWinner = false;
