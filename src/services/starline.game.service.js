@@ -94,7 +94,7 @@ export const declareStarlineResult = async ({ gameId, gameTitle, openingPanna, d
                 break;
             }
             case "Odd Even": {
-                const winningNum = parseInt(String(openingPanna)); 
+                const winningNum = parseInt(String(openingPanna));
                 const answer = String(bid.answer).trim().toLowerCase();
 
                 if (isNaN(winningNum)) {
@@ -119,6 +119,14 @@ export const declareStarlineResult = async ({ gameId, gameTitle, openingPanna, d
 
         if (isWinner) {
             const baseKey = bid.gameType.toLowerCase().replace(/\s+/g, '_');
+
+            if (bid.gameType.startsWith("SP")) {
+                baseKey = "single_pana";
+            } else if (bid.gameType.startsWith("DP")) {
+                baseKey = "double_pana";
+            } else if (bid.gameType.startsWith("TP")) {
+                baseKey = "triple_pana";
+            }
 
             const minRate = rates[`${baseKey}_1`];
             const maxRate = rates[`${baseKey}_2`];
