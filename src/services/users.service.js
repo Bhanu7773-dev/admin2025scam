@@ -150,12 +150,16 @@ export const createUser = async (userData) => {
  */
 export const getAllUsers = async ({ includeSubAdmins = false, limit = 20, startAfterId } = {}) => {
     let query = db.collection(USERS_COLLECTION)
+        .where("isAdmin", "==", false) // 🚫 Always exclude admins
         .orderBy("createdAt", "desc")
         .limit(limit);
 
-    // 🔹 Only apply filter when includeSubAdmins = true
+    // 🔹 When includeSubAdmins = true → only subadmins
     if (includeSubAdmins) {
         query = query.where("isSubAdmin", "==", true);
+    } else {
+        // 🔹 When false → exclude subadmins too
+        query = query.where("isSubAdmin", "==", false);
     }
 
     if (startAfterId) {
@@ -193,7 +197,7 @@ export const getAllUsers = async ({ includeSubAdmins = false, limit = 20, startA
             return {
                 id: u.id,
                 uid: u.uid,
-                idDisabled: u.isDisabled == true,
+                idDisabled: u.isDisabled === true,
                 username: u.username || "User",
                 name: u.name || auth.username || "User",
                 mobile: auth.mobile || "N/A",
@@ -210,6 +214,7 @@ export const getAllUsers = async ({ includeSubAdmins = false, limit = 20, startA
     const lastVisible = snapshot.docs[snapshot.docs.length - 1];
     return { users: results, nextCursor: lastVisible ? lastVisible.id : null };
 };
+
 
 
 
