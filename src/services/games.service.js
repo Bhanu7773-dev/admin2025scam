@@ -15,17 +15,18 @@ export const getAllGames = async () => {
 };
 
 /**
- * Adds a new game to the collection from a predefined master list.
- * @param {object} params - The parameters for the function.
- * @param {string} params.id - The unique ID of the game (e.g., 'kalyan-morning-panel-chart').
- * @param {string} params.name - The original name of the game (e.g., 'KALYAN MORNING').
- * @param {string} params.openTime - The opening time for the game (e.g., "10:00 AM").
- * @param {string} params.closeTime - The closing time for the game (e.g., "11:00 AM").
- * @returns {Promise<object>} The newly created game document.
- */
+* Adds a new game to the collection from a predefined master list.
+* @param {object} params - The parameters for the function.
+* @param {string} params.id - The unique ID of the game (e.g., 'kalyan-morning-panel-chart').
+* @param {string} params.name - The original name of the game (e.g., 'KALYAN MORNING').
+* @param {string} [params.openTime] - The opening time for the game (e.g., "11:00"). Can be empty.
+* @param {string} [params.closeTime] - The closing time for the game (e.g., "12:00"). Can be empty.
+* @returns {Promise<object>} The newly created game document.
+*/
 export const addGame = async ({ id, name, openTime, closeTime }) => {
-    if (!id || !name || !openTime || !closeTime) {
-        throw new Error("Game ID, name, openTime, and closeTime are required.");
+    // FIX: Only require the essential ID and name.
+    if (!id || !name) {
+        throw new Error("Game ID and name are required.");
     }
 
     const docRef = db.collection(GAMES_COLLECTION).doc(id);
@@ -39,8 +40,10 @@ export const addGame = async ({ id, name, openTime, closeTime }) => {
         name,
         altName: null,
         isDisabled: false,
-        openTime,
-        closeTime,
+        // This now correctly handles empty, null, or undefined values.
+        // It will save an empty string if openTime/closeTime is not provided.
+        openTime: openTime || '',
+        closeTime: closeTime || '',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
     };
 
@@ -61,7 +64,7 @@ export const updateGame = async ({ id, data }) => {
 
     const docRef = db.collection(GAMES_COLLECTION).doc(id);
     await docRef.update({ ...data, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-    
+
     return { success: true };
 };
 
